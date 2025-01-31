@@ -1,0 +1,4 @@
+pydantic
+Levenshtein
+pandas
+matplotlib
