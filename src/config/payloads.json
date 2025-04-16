@@ -1,19 +1,19 @@
 {
     "models": {
         "Model_1": {
-            "payload1_1": 0.6,
-            "payload1_2": 0.3,
-            "payload1_3": 0.1
+            "payload1_a": 0.6,
+            "payload1_b": 0.3,
+            "payload1_c": 0.1
         },
         "Model_2": {
-            "payload2_1": 0.5,
-            "payload2_2": 0.3,
-            "payload2_3": 0.2
+            "payload2_a": 0.5,
+            "payload2_b": 0.3,
+            "payload2_c": 0.2
         },
         "Model_3": {
-            "payload3_1": 0.4,
-            "payload3_2": 0.3,
-            "payload3_3": 0.3
+            "payload3_a": 0.4,
+            "payload3_b": 0.3,
+            "payload3_c": 0.3
         }
     }
 }
