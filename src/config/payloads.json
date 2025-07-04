@@ -1,19 +1,129 @@
 {
     "models": {
-        "Model_1": {
-            "payload1_a": 0.6,
-            "payload1_b": 0.3,
-            "payload1_c": 0.1
+        "Model_Group_A_DynamicUnique": {
+            "overall_probability": 0.20,
+            "dynamic_unique_payload": true
         },
-        "Model_2": {
-            "payload2_a": 0.5,
-            "payload2_b": 0.3,
-            "payload2_c": 0.2
+        "Model_B_01": {
+            "overall_probability": 0.08,
+            "payload_distribution": {
+                "B_common_payload_X": 1.0
+            }
         },
-        "Model_3": {
-            "payload3_a": 0.4,
-            "payload3_b": 0.3,
-            "payload3_c": 0.3
+        "Model_B_02": {
+            "overall_probability": 0.08,
+            "payload_distribution": {
+                "B_common_payload_X": 1.0
+            }
+        },
+        "Model_B_03": {
+            "overall_probability": 0.08,
+            "payload_distribution": {
+                "B_common_payload_Y": 1.0
+            }
+        },
+        "Model_B_04": {
+            "overall_probability": 0.08,
+            "payload_distribution": {
+                "B_common_payload_Z": 1.0
+            }
+        },
+        "Model_B_05": {
+            "overall_probability": 0.08,
+            "payload_distribution": {
+                "B_common_payload_X": 1.0
+            }
+        },
+        "Model_C_01": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_01_base_payload": 0.9,
+                "C_01_variant_small": 0.1
+            }
+        },
+        "Model_C_02": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_02_base_payload": 0.9,
+                "C_02_variant_small": 0.1
+            }
+        },
+        "Model_C_03": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_03_base_payload": 0.9,
+                "C_03_variant_small": 0.1
+            }
+        },
+        "Model_C_04": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_04_base_payload": 0.9,
+                "C_04_variant_small": 0.1
+            }
+        },
+        "Model_C_05": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_05_base_payload": 0.9,
+                "C_05_variant_small": 0.1
+            }
+        },
+        "Model_C_06": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_06_base_payload": 0.9,
+                "C_06_variant_small": 0.1
+            }
+        },
+        "Model_C_07": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_07_base_payload": 0.9,
+                "C_07_variant_small": 0.1
+            }
+        },
+        "Model_C_08": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_08_base_payload": 0.9,
+                "C_08_variant_small": 0.1
+            }
+        },
+        "Model_C_09": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_09_base_payload": 0.9,
+                "C_09_variant_small": 0.1
+            }
+        },
+        "Model_C_10": {
+            "overall_probability": 0.035,
+            "payload_distribution": {
+                "C_10_base_payload": 0.9,
+                "C_10_variant_small": 0.1
+            }
+        },
+        "Model_D_01": {
+            "overall_probability": 0.016667,
+            "payload_distribution": {
+                "D_01_state1_payload": 0.5,
+                "D_01_state2_payload": 0.5
+            }
+        },
+        "Model_D_02": {
+            "overall_probability": 0.016667,
+            "payload_distribution": {
+                "D_02_state1_payload": 0.5,
+                "D_02_state2_payload": 0.5
+            }
+        },
+        "Model_D_03": {
+            "overall_probability": 0.016666,
+            "payload_distribution": {
+                "D_03_state1_payload": 0.5,
+                "D_03_state2_payload": 0.5
+            }
         }
     }
 }
