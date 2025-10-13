@@ -6,19 +6,8 @@ from datetime import datetime, timedelta
 import os
 from collections import defaultdict
 
-# --- 定数とクラスの定義 ---
-# 設定ファイルから読み込むため、ここでは直接定義しない
-# WALKER_SPEED = 1.4
-# VARIATION_FACTOR = 0.1
-# PAYLOADS_PER_DETECTOR_PER_WALKER = 10
-# NUM_WALKERS_TO_SIMULATE = 10
-
-
-class Detector:
-    def __init__(self, id: str, x: float, y: float):
-        self.id = id
-        self.x = x
-        self.y = y
+from domain.detector import Detector, load_detectors
+from utils.calculate_function import calculate_travel_time
 
 
 # --- 設定ファイルの読み込み関数を追加 ---
@@ -27,14 +16,6 @@ def load_simulation_settings(file_path: str) -> dict:
     with open(file_path, "r") as file:
         data = json.load(file)
         return data["simulation_settings"]
-
-
-# --- 設定データの読み込み ---
-def load_detectors(file_path: str) -> dict[str, Detector]:
-    """JSONファイルから検出器情報をロードし、IDをキーとする辞書で返す"""
-    with open(file_path, "r") as file:
-        data = json.load(file)
-        return {d["id"]: Detector(**d) for d in data["detectors"]}
 
 
 def load_payloads(file_path: str) -> tuple[dict, list, list]:
@@ -128,7 +109,7 @@ def assign_models_to_walkers(
 
 
 def choose_payload_for_model(
-    model_name: str, assigned_payload_id: str or None, payload_distributions: dict
+    model_name: str, assigned_payload_id: str | None, payload_distributions: dict
 ) -> str:
     """
     指定されたモデルの確率分布に基づいて、ペイロードをランダムに選択します。
@@ -149,22 +130,6 @@ def choose_payload_for_model(
     return chosen_payload
 
 
-def calculate_travel_time(
-    ax: float, ay: float, bx: float, by: float, speed: float, variation_factor: float
-) -> float:
-    """
-    2つの座標間のユークリッド距離を計算し、定義された速度とばらつき要因に基づいて移動時間を算出します。
-    """
-    distance = math.sqrt((bx - ax) ** 2 + (by - ay) ** 2)
-    base_time = distance / speed if speed > 0 else 0
-    # ランダムなばらつきを追加
-    variation = (
-        base_time * variation_factor * (random.random() * 2 - 1)
-    )  # -variation_factorから+variation_factorの範囲
-    travel_time = max(0, base_time + variation)
-    return travel_time
-
-
 # --- シミュレーションの実行 ---
 def simulate(
     detectors: dict[str, Detector],
@@ -178,7 +143,7 @@ def simulate(
     """
     スマートフォンの検出シミュレーションを実行し、ログファイルを生成します。
     """
-    results_dir = "src/result"
+    results_dir = "result"
     os.makedirs(results_dir, exist_ok=True)
 
     # 既存のログファイルを削除

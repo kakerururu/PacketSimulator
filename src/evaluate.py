@@ -1,26 +1,12 @@
-import json
 import csv
-import math
 from datetime import datetime
 from collections import defaultdict
 import os
+from utils.calculate_function import calculate_min_travel_time
+from domain.detector import Detector, load_detectors
 
 # 定数（main.ipynbから引用）
 WALKER_SPEED = 1.4  # 通行人の移動速度（m/s）
-
-
-class Detector:
-    def __init__(self, id: str, float_x: float, float_y: float):
-        self.id = id
-        self.x = float_x
-        self.y = float_y
-
-
-def load_detectors(file_path: str) -> dict[str, Detector]:
-    """JSONファイルから検知器情報をロードし、IDをキーとする辞書で返す"""
-    with open(file_path, "r") as file:
-        data = json.load(file)
-        return {d["id"]: Detector(d["id"], d["x"], d["y"]) for d in data["detectors"]}
 
 
 def load_logs(log_dir: str) -> list[dict]:
@@ -55,12 +41,6 @@ def load_logs(log_dir: str) -> list[dict]:
     # タイムスタンプで全体をソート
     all_logs.sort(key=lambda x: x["Timestamp"])
     return all_logs
-
-
-def calculate_min_travel_time(det1: Detector, det2: Detector, speed: float) -> float:
-    """検知器AからBへの最小移動時間を計算（ばらつきなし）"""
-    distance = math.sqrt((det2.x - det1.x) ** 2 + (det2.y - det1.y) ** 2)
-    return distance / speed if speed > 0 else 0
 
 
 def load_ground_truth_routes(file_path: str) -> dict[str, str]:
@@ -309,8 +289,8 @@ def evaluate_algorithm(
 
 def main():
     detector_config_path = "src/config/detectors.json"
-    log_dir = "src/result"
-    ground_truth_path = "src/result/walker_routes.csv"
+    log_dir = "result"
+    ground_truth_path = "result/walker_routes.csv"
 
     # データの読み込み
     detectors = load_detectors(detector_config_path)
