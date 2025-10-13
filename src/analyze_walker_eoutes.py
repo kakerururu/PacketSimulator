@@ -11,7 +11,7 @@ WALKER_SPEED = 1.4  # 通行人の移動速度（m/s）
 # --- クラスタリングロジック用の定数 ---
 # ペイロードが「ありえない移動」をしたと判断する閾値 (最小移動時間の何%未満か)
 TRAVEL_TIME_THRESHOLD_FACTOR = 0.8
-# CLUSTER_WINDOW_SECONDS は、このバージョンでは使用しないが、変数として残す
+# CLUSTER_WINDOW_SECONDS は、このロジックでは使用しないが、変数として残す
 # 今後の拡張のために、設定ファイルなどで管理することも検討可能
 CLUSTER_WINDOW_SECONDS = 300  # 5分
 
@@ -85,8 +85,13 @@ def analyze_movements_with_clustering(
 ) -> dict[str, str]:
     """
     ログデータからHashed_Payloadごとのイベントを分析し、
-    物理的にありえない移動があった場合に新しいクラスタIDを割り当てる（即座に分割）。
+    物理的にありえない移動があった場合、一つ先のイベントを見て結合を試みる（簡易ウィンドウロジック）。
+    見つからない場合はクラスタを分割。
     """
+    estimated_clustered_routes = {}
+    cluster_counter = defaultdict(int)
+
+    # Hashed_Payload ごとにイベントを収集し、ソート
     payload_events = defaultdict(list)
     for log_entry in logs:
         current_detector_id = None
@@ -110,77 +115,214 @@ def analyze_movements_with_clustering(
     for payload_id in payload_events:
         payload_events[payload_id].sort(key=lambda x: x["Timestamp"])
 
-    estimated_clustered_routes = {}  # キーは仮想的なクラスタID (例: "payloadX_cluster1")
-    cluster_counter = defaultdict(int)  # 各Hashed_Payloadに対するクラスタ番号を管理
+    print(f"\n--- クラスタリング開始: 各ペイロードIDのイベントを処理 ---")
 
-    # 各 Hashed_Payload のイベントシーケンスを分析
     for payload_id, events in payload_events.items():
         if not events:
+            print(f"  ペイロードID: {payload_id} - イベントなし。スキップ。")
             continue
 
-        current_route_sequence_list = []
+        print(f"\n  ペイロードID: {payload_id} のイベント処理開始 ({len(events)}個)")
 
-        # 最初のイベントで最初のクラスタとルートを開始
-        cluster_counter[payload_id] += 1
-        current_cluster_id = f"{payload_id}_cluster{cluster_counter[payload_id]}"
-        current_route_sequence_list.append(events[0]["Detector_ID"])
+        # このペイロードのイベントリストで、既に処理済みのイベントのインデックスを追跡するセット
+        processed_event_indices = set()
 
-        prev_event = events[0]  # 直前の有効なイベント
+        # 現在処理中のイベントリストのインデックス (新しいクラスタの開始点候補)
+        current_event_idx = 0
 
-        for i in range(1, len(events)):
-            current_event = events[i]
-
-            prev_det_id = prev_event["Detector_ID"]
-            current_det_id_for_check = current_event["Detector_ID"]
-
-            # 同じ検出器での連続した検出は、ルートシーケンスに重複して追加しない
-            if current_det_id_for_check == current_route_sequence_list[-1]:
-                prev_event = current_event
+        while current_event_idx < len(events):
+            # もし現在のイベントが既に何らかのクラスタに割り当て済みであれば、スキップして次へ
+            if current_event_idx in processed_event_indices:
+                current_event_idx += 1
+                print(
+                    f"    インデックス {current_event_idx - 1} (イベント {events[current_event_idx - 1]['Detector_ID']}) は既に処理済み。次へスキップ。"
+                )
                 continue
 
-            # 移動時間のチェック
-            time_diff = (
-                current_event["Timestamp"] - prev_event["Timestamp"]
-            ).total_seconds()
+            # 新しいクラスタの開始
+            cluster_counter[payload_id] += 1
+            current_cluster_id = f"{payload_id}_cluster{cluster_counter[payload_id]}"
 
-            det1_obj = detectors[prev_det_id]
-            det2_obj = detectors[current_det_id_for_check]
+            # このクラスタの最初のイベント
+            start_event_for_cluster = events[current_event_idx]
+            current_route_sequence_list = [start_event_for_cluster["Detector_ID"]]
+            processed_event_indices.add(
+                current_event_idx
+            )  # クラスタの開始イベントを処理済みとしてマーク
 
-            min_travel_time = calculate_min_travel_time(
-                det1_obj, det2_obj, WALKER_SPEED
+            last_valid_event_in_cluster = (
+                start_event_for_cluster  # このクラスタで最後に確定された有効なイベント
             )
 
-            # ありえない移動の場合：現在のルートシーケンスを確定し、新しいクラスタを開始
-            # 閾値は min_travel_time * TRAVEL_TIME_THRESHOLD_FACTOR
-            if time_diff < min_travel_time * TRAVEL_TIME_THRESHOLD_FACTOR:
-                # これまでのルートシーケンスを確定して保存
-                # ルートが有効（少なくとも2つの異なる検出器を含む）な場合のみ保存
-                if len(current_route_sequence_list) > 1:
-                    estimated_clustered_routes[current_cluster_id] = "".join(
-                        current_route_sequence_list
+            print(
+                f"    新しいクラスタ {current_cluster_id} 開始。開始イベント: {start_event_for_cluster['Detector_ID']} @ {start_event_for_cluster['Timestamp']}"
+            )
+            print(f"      初期ルート: {''.join(current_route_sequence_list)}")
+
+            # 内側のループで現在のクラスタのルートを構築
+            # search_from_idx は current_event_idx の次のイベントから開始
+            search_from_idx = current_event_idx + 1
+
+            while search_from_idx < len(events):
+                candidate_event = events[search_from_idx]
+
+                # この候補イベントが既に処理済みであればスキップ（他のクラスタに割り当て済み）
+                if search_from_idx in processed_event_indices:
+                    search_from_idx += 1  # 次のイベントへ
+                    continue
+
+                # 同じ検出器での連続検出は、ルートシーケンスに重複して追加しないが、last_valid_eventは更新する
+                if candidate_event["Detector_ID"] == current_route_sequence_list[-1]:
+                    print(
+                        f"        候補 {search_from_idx} ({candidate_event['Detector_ID']}) @ {candidate_event['Timestamp']} は同じ検出器。last_valid_eventを更新。"
                     )
+                    last_valid_event_in_cluster = candidate_event
+                    processed_event_indices.add(
+                        search_from_idx
+                    )  # 同じ検出器でも処理済みとしてマーク
+                    search_from_idx += 1
+                    continue
 
-                # 新しいクラスタの開始
-                cluster_counter[payload_id] += 1
-                current_cluster_id = (
-                    f"{payload_id}_cluster{cluster_counter[payload_id]}"
+                # last_valid_event_in_cluster から candidate_event への移動を評価
+                time_diff = (
+                    candidate_event["Timestamp"]
+                    - last_valid_event_in_cluster["Timestamp"]
+                ).total_seconds()
+
+                det1_obj = detectors[last_valid_event_in_cluster["Detector_ID"]]
+                det2_obj = detectors[candidate_event["Detector_ID"]]
+
+                min_travel_time = calculate_min_travel_time(
+                    det1_obj, det2_obj, WALKER_SPEED
                 )
-                current_route_sequence_list = [
-                    current_det_id_for_check
-                ]  # 新しいルートは現在の検出器から開始
-                prev_event = current_event  # 新しいクラスタの最初のイベントとして設定
-                continue  # 次のイベントへ
 
-            # 有効な移動として、ルートシーケンスに追加
-            current_route_sequence_list.append(current_det_id_for_check)
-            prev_event = current_event  # 次の比較のためにprev_eventを更新
+                is_impossible_move = (
+                    time_diff < min_travel_time * TRAVEL_TIME_THRESHOLD_FACTOR
+                )
 
-        # ループ終了後、最後に構築中のルートシーケンスを確定して保存
-        if len(current_route_sequence_list) > 1:
-            estimated_clustered_routes[current_cluster_id] = "".join(
-                current_route_sequence_list
-            )
+                if is_impossible_move:
+                    # 「ありえない移動」の場合：一つ先のイベントを見て結合を試みる
+                    print(
+                        f"        ありえない移動 ({last_valid_event_in_cluster['Detector_ID']}->{candidate_event['Detector_ID']}) @ {candidate_event['Timestamp']} を検出。一つ先を確認。"
+                    )
+                    found_valid_skip_connection = False
 
+                    if search_from_idx + 1 < len(
+                        events
+                    ):  # E_next (一つ先のイベント) が存在するか
+                        next_event_after_candidate = events[search_from_idx + 1]
+
+                        # next_event_after_candidate が既に処理済みであればスキップ判定は適用しない
+                        if (search_from_idx + 1) in processed_event_indices:
+                            print(
+                                f"          次候補 {search_from_idx + 1} ({next_event_after_candidate['Detector_ID']}) は既に処理済み。スキップ判定できず。"
+                            )
+                            found_valid_skip_connection = False
+                        else:
+                            # last_valid_event_in_cluster から next_event_after_candidate への移動が物理的に可能かチェック
+                            time_diff_to_next_event = (
+                                next_event_after_candidate["Timestamp"]
+                                - last_valid_event_in_cluster["Timestamp"]
+                            ).total_seconds()
+                            det_next_obj = detectors[
+                                next_event_after_candidate["Detector_ID"]
+                            ]
+                            min_travel_time_to_next_event = calculate_min_travel_time(
+                                det1_obj, det_next_obj, WALKER_SPEED
+                            )
+
+                            if (
+                                time_diff_to_next_event
+                                >= min_travel_time_to_next_event
+                                * TRAVEL_TIME_THRESHOLD_FACTOR
+                            ):
+                                # E_prev_valid から E_next が繋がる！E_current はノイズと判断しスキップ
+                                found_valid_skip_connection = True
+                                print(
+                                    f"          ありえない移動 ({candidate_event['Detector_ID']}) をスキップし、{next_event_after_candidate['Detector_ID']} へ接続。"
+                                )
+                            else:
+                                print(
+                                    f"          E_prev_valid から E_next ({next_event_after_candidate['Detector_ID']}) もありえない移動。スキップできず。"
+                                )
+                                found_valid_skip_connection = False
+                    else:
+                        print(f"        E_next が存在しないため、スキップできず。")
+                        found_valid_skip_connection = (
+                            False  # E_next がなければスキップはできない
+                        )
+
+                    if found_valid_skip_connection:
+                        # E_current をスキップし、E_next をルートに追加
+                        current_route_sequence_list.append(
+                            next_event_after_candidate["Detector_ID"]
+                        )
+                        # スキップされたイベント (candidate_event) と接続に使用したイベント (next_event_after_candidate) を処理済みとしてマーク
+                        processed_event_indices.add(
+                            search_from_idx
+                        )  # candidate_event (スキップされたノイズ)
+                        processed_event_indices.add(
+                            search_from_idx + 1
+                        )  # next_event_after_candidate (接続点)
+
+                        last_valid_event_in_cluster = next_event_after_candidate
+                        search_from_idx += 2  # candidate_event と next_event_after_candidate の両方を飛ばして次へ
+                        print(
+                            f"      ルート延長 (スキップ経由): {''.join(current_route_sequence_list)}"
+                        )
+                        print(f"      search_from_idx 更新: {search_from_idx}")
+                        continue  # このループの残りはスキップし、次の candidate_event を評価
+
+                    else:
+                        # 「ありえない移動」だが、スキップして繋げることもできなかった場合
+                        # このクラスタはここで終了し、candidate_event は新しいクラスタの開始点となる
+                        print(
+                            f"      ありえない移動 ({candidate_event['Detector_ID']}) でクラスタ分割。現在のクラスタを終了。"
+                        )
+                        break  # 内側の while ループを抜けて、現在のクラスタを確定
+
+                else:  # is_impossible_move is False, meaning current move IS physically possible
+                    # そのままルートに追加
+                    current_route_sequence_list.append(candidate_event["Detector_ID"])
+                    processed_event_indices.add(search_from_idx)  # 処理済みとしてマーク
+
+                    last_valid_event_in_cluster = candidate_event
+                    search_from_idx += 1
+                    print(
+                        f"      ルート延長 (通常): {''.join(current_route_sequence_list)}"
+                    )
+                    print(f"      search_from_idx 更新: {search_from_idx}")
+
+            # 現在構築中のルートシーケンスを確定して保存
+            if len(current_route_sequence_list) > 1:
+                estimated_clustered_routes[current_cluster_id] = "".join(
+                    current_route_sequence_list
+                )
+                print(
+                    f"    クラスタ {current_cluster_id} ルート確定: {''.join(current_route_sequence_list)}"
+                )
+            else:
+                print(f"    クラスタ {current_cluster_id} ルートは短いため保存せず。")
+
+            # 外側ループの current_event_idx を更新
+            # 次の処理は、processed_event_indices に含まれない、最もインデックスの小さいイベントから開始
+            next_unprocessed_idx = -1
+            # range(current_event_idx + 1, len(events)) からではなく、0から全てを走査し直すことで、
+            # 完全に網羅的に「次の未処理イベント」を見つける
+            for idx_check in range(len(events)):  # 全てのイベントを走査
+                if idx_check not in processed_event_indices:
+                    next_unprocessed_idx = idx_check
+                    break
+
+            if next_unprocessed_idx != -1:
+                current_event_idx = next_unprocessed_idx
+                print(f"    次のクラスタ開始点候補インデックス: {current_event_idx}")
+            else:
+                # すべてのイベントが処理済みであれば、このペイロードの処理を終了
+                print(f"    ペイロードID: {payload_id} のイベント処理完了。")
+                break
+
+    print(f"\n--- クラスタリング完了 ---")
     return estimated_clustered_routes
 
 
@@ -335,7 +477,7 @@ def main():
     print("-" * 30)
 
     # 移動経路の推定とありえない移動の排除、およびクラスタリング
-    # ウィンドウロジックは削除し、以前の「ありえない移動で即時分割」ロジックに戻す
+    # ウィンドウロジック導入（一つ先を見る簡易版）
     estimated_clustered_routes = analyze_movements_with_clustering(logs, detectors)
 
     print("\n--- 推定結果 (クラスタリング後の推定ルート) ---")
@@ -353,31 +495,21 @@ def main():
     )
 
     print("\n--- 評価結果サマリー ---")
-    # 人数推定の誤差指標を前面に
+    # シンプルな正答率とエラー率のみを表示
+    print(f"正解率 (Accuracy): {evaluation_results['summary']['Accuracy']}")
     print(
-        f"平均絶対誤差（ルートあたり人数） (MAE): {evaluation_results['summary']['MAE_PerUniqueRoute']:.4f}"
+        f"間違っている率 (Total Percentage Error): {evaluation_results['summary']['TotalPercentageError']}"
+    )
+    # 詳細な情報も簡潔に表示
+    print(
+        f"合計正しく推定されたインスタンス (TP): {evaluation_results['summary']['Total_TP']}"
     )
     print(
-        f"二乗平均平方根誤差（ルートあたり人数） (RMSE): {evaluation_results['summary']['RMSE_PerUniqueRoute']:.4f}"
+        f"合計誤って推定されたインスタンス (FP): {evaluation_results['summary']['Total_FP']}"
     )
     print(
-        f"総絶対誤差の割合 (Total Percentage Error): {evaluation_results['summary']['TotalPercentageError']}"
+        f"合計見落とされたインスタンス (FN): {evaluation_results['summary']['Total_FN']}"
     )
-    # print("\n--- 分類性能指標 (参考) ---")
-    # print(f"正解率 (Accuracy): {evaluation_results['summary']['Accuracy']}")
-    # print(f"適合率 (Precision): {evaluation_results['summary']['Precision']}")
-    # print(f"再現率 (Recall): {evaluation_results['summary']['Recall']}")
-    # print(f"F1スコア (F1_Score): {evaluation_results['summary']['F1_Score']}")
-    # print("\n--- 評価カウントサマリー ---")
-    # print(
-    #     f"合計正しく推定されたインスタンス (TP): {evaluation_results['summary']['Total_TP']}"
-    # )
-    # print(
-    #     f"合計誤って推定されたインスタンス (FP): {evaluation_results['summary']['Total_FP']}"
-    # )
-    # print(
-    #     f"合計見落とされたインスタンス (FN): {evaluation_results['summary']['Total_FN']}"
-    # )
 
     print("\n--- 評価結果詳細 (ユニークなルートシーケンス) ---")
     print(

@@ -5,18 +5,13 @@ import random
 from datetime import datetime, timedelta
 import os
 from collections import defaultdict
-# /usr/local/bin/python /workspaces/PacketSimulator/src/analyze_walker_eoutes.py| grep Total
 
 # --- 定数とクラスの定義 ---
-WALKER_SPEED = 1.4  # 通行人の移動速度（m/s）
-VARIATION_FACTOR = 0.1  # 移動時間におけるランダムなばらつきの割合
-
-# --- 新しく追加・修正した変数 ---
-PAYLOADS_PER_DETECTOR_PER_WALKER = (
-    10
-    # 各検出器に到達した際に放出するペイロードの数（任意で設定可能）
-)
-NUM_WALKERS_TO_SIMULATE = 30  # シミュレートするウォーカーの人数（任意で設定可能）
+# 設定ファイルから読み込むため、ここでは直接定義しない
+# WALKER_SPEED = 1.4
+# VARIATION_FACTOR = 0.1
+# PAYLOADS_PER_DETECTOR_PER_WALKER = 10
+# NUM_WALKERS_TO_SIMULATE = 10
 
 
 class Detector:
@@ -24,6 +19,14 @@ class Detector:
         self.id = id
         self.x = x
         self.y = y
+
+
+# --- 設定ファイルの読み込み関数を追加 ---
+def load_simulation_settings(file_path: str) -> dict:
+    """JSONファイルからシミュレーション設定をロードする"""
+    with open(file_path, "r") as file:
+        data = json.load(file)
+        return data["simulation_settings"]
 
 
 # --- 設定データの読み込み ---
@@ -53,7 +56,6 @@ def load_payloads(file_path: str) -> tuple[dict, list, list]:
         overall_probabilities.append(model_data["overall_probability"])
 
         # dynamic_unique_payload フラグを持つモデルは、payload_distributionを持たない
-        # フラグがTrueの場合、そのモデル名に対応するペイロード分布に{"dynamic_unique_payload": True}を設定
         if (
             "dynamic_unique_payload" in model_data
             and model_data["dynamic_unique_payload"]
@@ -112,7 +114,6 @@ def assign_models_to_walkers(
 
         assigned_payload_id = None
         # もし割り当てられたモデルが動的にユニークなペイロードを生成するタイプなら
-        # payload_definitions は load_payloads の返り値である payload_distributions (辞書) を想定
         if (
             "dynamic_unique_payload" in payload_definitions[assigned_model_name]
             and payload_definitions[assigned_model_name]["dynamic_unique_payload"]
@@ -171,6 +172,8 @@ def simulate(
     walker_details: dict[str, dict],
     payload_distributions: dict,
     payloads_per_detector: int,
+    walker_speed: float,
+    variation_factor: float,
 ):
     """
     スマートフォンの検出シミュレーションを実行し、ログファイルを生成します。
@@ -253,8 +256,8 @@ def simulate(
                     current_detector.y,
                     next_detector.x,
                     next_detector.y,
-                    WALKER_SPEED,
-                    VARIATION_FACTOR,
+                    walker_speed,
+                    variation_factor,  # パラメータとして受け取った値を使用
                 )
                 current_time += timedelta(
                     seconds=travel_duration
@@ -292,39 +295,53 @@ def simulate(
 def main():
     detector_config_path = "src/config/detectors.json"
     payloads_config_path = "src/config/payloads.json"
+    simulation_settings_path = (
+        "src/config/simulation_settings.json"  # 新しい設定ファイル
+    )
 
     # 設定データの読み込み
     detectors = load_detectors(detector_config_path)
-    # load_payloadsの戻り値の型を調整
     payload_distributions, model_names, model_probabilities = load_payloads(
         payloads_config_path
     )
+    simulation_settings = load_simulation_settings(
+        simulation_settings_path
+    )  # 設定を読み込む
+
+    # 設定値を変数に格納
+    num_walkers_to_simulate = simulation_settings["num_walkers_to_simulate"]
+    payloads_per_detector_per_walker = simulation_settings[
+        "payloads_per_detector_per_walker"
+    ]
+    walker_speed = simulation_settings["walker_speed"]
+    variation_factor = simulation_settings["variation_factor"]
 
     print(f"検出器数: {len(detectors)}")
     print(
         f"利用可能なモデル: {model_names} (確率: {[f'{p:.2f}' for p in model_probabilities]})"
     )
-    print(f"シミュレートするウォーカー数: {NUM_WALKERS_TO_SIMULATE}人")
+    print(f"シミュレートするウォーカー数: {num_walkers_to_simulate}人")
     print(
-        f"各検出器でウォーカーあたりに放出されるペイロード数: {PAYLOADS_PER_DETECTOR_PER_WALKER}個"
+        f"各検出器でウォーカーあたりに放出されるペイロード数: {payloads_per_detector_per_walker}個"
     )
+    print(f"ウォーカーの移動速度: {walker_speed} m/s")
+    print(f"移動時間のばらつき要因: {variation_factor}")
 
     # ウォーカーごとのルートとモデルを生成
-    walker_routes = generate_routes(detectors, NUM_WALKERS_TO_SIMULATE)
-    # assign_models_to_walkersの引数を変更
-    # payload_distributions を引数として渡すことで、動的ペイロードモデルの情報を関数内で利用可能にする
+    walker_routes = generate_routes(detectors, num_walkers_to_simulate)
     walker_details = assign_models_to_walkers(
-        NUM_WALKERS_TO_SIMULATE, model_names, model_probabilities, payload_distributions
+        num_walkers_to_simulate, model_names, model_probabilities, payload_distributions
     )
 
     # シミュレーション実行
-    # simulateの引数を変更
     simulate(
         detectors,
         walker_routes,
         walker_details,
         payload_distributions,
-        PAYLOADS_PER_DETECTOR_PER_WALKER,
+        payloads_per_detector_per_walker,
+        walker_speed,
+        variation_factor,
     )
 
 
