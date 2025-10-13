@@ -288,7 +288,7 @@ def evaluate_algorithm(
 
 
 def main():
-    detector_config_path = "src/config/detectors.json"
+    detector_config_path = "config/detectors.json"
     log_dir = "result"
     ground_truth_path = "result/walker_routes.csv"
 

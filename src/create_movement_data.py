@@ -258,11 +258,9 @@ def simulate(
 
 # --- メイン実行部分 ---
 def main():
-    detector_config_path = "src/config/detectors.json"
-    payloads_config_path = "src/config/payloads.json"
-    simulation_settings_path = (
-        "src/config/simulation_settings.json"  # 新しい設定ファイル
-    )
+    detector_config_path = "config/detectors.json"
+    payloads_config_path = "config/payloads.json"
+    simulation_settings_path = "config/simulation_settings.json"  # 新しい設定ファイル
 
     # 設定データの読み込み
     detectors = load_detectors(detector_config_path)
