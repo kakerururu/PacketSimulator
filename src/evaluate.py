@@ -1,3 +1,4 @@
+import numpy as np
 from collections import defaultdict
 from utils.calculate_function import calculate_min_travel_time
 from domain.detector import Detector, load_detectors
@@ -139,6 +140,7 @@ def evaluate_algorithm(
 
     # --- 評価指標の計算 ---
     total_absolute_error = 0
+    squared_errors = []
     total_true_route_instances = sum(
         true_route_counts.values()
     )  # 評価対象となる真のルートインスタンスの合計
@@ -149,34 +151,18 @@ def evaluate_algorithm(
         estimated_route_counts.keys()
     )
 
-    # Precision, Recall, F1-score, Accuracy 計算用の変数
-    TP = 0  # True Positives
-    FP = 0  # False Positives
-    FN = 0  # False Negatives
-
     results_details = []
 
     for route_str in sorted(list(all_unique_routes)):
-        true_count = true_route_counts[route_str]
-        estimated_count = estimated_route_counts[route_str]
+        true_count = true_route_counts.get(route_str, 0)
+        estimated_count = estimated_route_counts.get(route_str, 0)
 
         # Absolute Error
-        abs_error = abs(estimated_count - true_count)
+        error = estimated_count - true_count
+        abs_error = abs(error)
         total_absolute_error += abs_error
+        squared_errors.append(error**2)
         num_unique_routes_evaluated += 1
-
-        # TP, FP, FN の計算
-        # TP: 真と推定が両方にある最小値 (正しく推定されたインスタンス数)
-        TP_current = min(true_count, estimated_count)
-        TP += TP_current
-
-        # FP: 推定が真より多い場合 (誤って推定されたインスタンス数)
-        FP_current = max(0, estimated_count - true_count)
-        FP += FP_current
-
-        # FN: 真が推定より多い場合 (見落とされたインスタンス数)
-        FN_current = max(0, true_count - estimated_count)
-        FN += FN_current
 
         results_details.append(
             {
@@ -184,9 +170,6 @@ def evaluate_algorithm(
                 "TrueCount": true_count,
                 "EstimatedCount": estimated_count,
                 "AbsoluteError": abs_error,
-                "TP_current": TP_current,
-                "FP_current": FP_current,
-                "FN_current": FN_current,
             }
         )
 
@@ -197,41 +180,32 @@ def evaluate_algorithm(
         else 0
     )
 
-    # 全てのルートインスタンスの合計に対するパーセンテージ誤差
-    total_percentage_error = (
-        (total_absolute_error / total_true_route_instances) * 100
+    # RMSEの計算
+    mse = np.mean(squared_errors) if squared_errors else 0
+    rmse = np.sqrt(mse)
+
+    # 追跡率 (Tracking Rate) の計算
+    # 全ての真の通行人のうち、ルートが正しく推定された通行人の割合
+    # 計算式: Σ min(各ルートの真の人数, 各ルートの推定人数) / (全ウォーカーの総数)
+    # 例: 真が5人/推定4人なら4人、真が2人/推定3人なら2人が追跡成功とカウントされる
+    correctly_tracked_walkers = sum(
+        min(true_route_counts.get(route, 0), estimated_route_counts.get(route, 0))
+        for route in all_unique_routes
+    )
+    tracking_rate = (
+        correctly_tracked_walkers / total_true_route_instances
         if total_true_route_instances > 0
         else 0
     )
-
-    # Precision, Recall, F1-score の計算
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 0
-    recall = TP / (TP + FN) if (TP + FN) > 0 else 0
-    f1_score = (
-        2 * (precision * recall) / (precision + recall)
-        if (precision + recall) > 0
-        else 0
-    )
-
-    # Accuracy (正解率) の計算
-    # 全ての真のルートインスタンスのうち、TPとして正しく推定できたインスタンスの割合
-    accuracy = TP / total_true_route_instances if total_true_route_instances > 0 else 0
 
     return {
         "summary": {
             "TotalUniqueRoutesEvaluated": num_unique_routes_evaluated,
             "TotalTrueRouteInstances": total_true_route_instances,
             "TotalEstimatedRouteInstances": sum(estimated_route_counts.values()),
-            "TotalAbsoluteError": total_absolute_error,
             "MAE_PerUniqueRoute": mae_per_route,
-            "TotalPercentageError": f"{total_percentage_error:.2f}%",
-            "Precision": f"{precision:.4f}",
-            "Recall": f"{recall:.4f}",
-            "F1_Score": f"{f1_score:.4f}",
-            "Accuracy": f"{accuracy:.4f}",
-            "Total_TP": TP,
-            "Total_FP": FP,
-            "Total_FN": FN,
+            "RMSE": f"{rmse:.4f}",
+            "TrackingRate": f"{tracking_rate:.4f}",  # 追跡率を追加
         },
         "details": results_details,
     }
@@ -278,24 +252,19 @@ def main():
         print(f"{key}: {value}")
     print("\n--- 評価結果詳細 (ユニークなルートシーケンス) ---")
     print(
-        "{:<15} {:>10} {:>15} {:>15} {:>7} {:>7} {:>7}".format(
-            "ルート", "真の数", "推定数", "絶対誤差", "TP", "FP", "FN"
-        )
+        "{:<15} {:>10} {:>15} {:>15}".format("ルート", "真の数", "推定数", "絶対誤差")
     )
-    print("-" * 75)
+    print("-" * 60)
     for detail in evaluation_results["details"]:
         print(
-            "{:<15} {:>10} {:>15} {:>15} {:>7} {:>7} {:>7}".format(
+            "{:<15} {:>10} {:>15} {:>15}".format(
                 detail["Route"],
                 detail["TrueCount"],
                 detail["EstimatedCount"],
                 detail["AbsoluteError"],
-                detail["TP_current"],
-                detail["FP_current"],
-                detail["FN_current"],
             )
         )
-    print("-" * 75)
+    print("-" * 60)
 
 
 if __name__ == "__main__":
