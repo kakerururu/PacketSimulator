@@ -1,59 +1,9 @@
-import csv
-from datetime import datetime
 from collections import defaultdict
-import os
 from utils.calculate_function import calculate_min_travel_time
 from domain.detector import Detector, load_detectors
+from utils.load import load_ground_truth_routes, load_logs
 
-# 定数（main.ipynbから引用）
 WALKER_SPEED = 1.4  # 通行人の移動速度（m/s）
-
-
-def load_logs(log_dir: str) -> list[dict]:
-    """
-    指定されたディレクトリからすべてのログファイルを読み込み、結合する。
-    """
-    all_logs = []
-    for filename in os.listdir(log_dir):
-        if filename.endswith("_log.csv"):
-            filepath = os.path.join(log_dir, filename)
-            with open(filepath, "r") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    # 'zTimestamp' のような不規則なヘッダーに対応
-                    timestamp_key = "Timestamp"
-                    if "zTimestamp" in row:
-                        timestamp_key = "zTimestamp"
-
-                    try:
-                        row["Timestamp"] = datetime.strptime(
-                            row[timestamp_key], "%Y-%m-%d %H:%M:%S"
-                        )
-                    except ValueError:
-                        row["Timestamp"] = datetime.strptime(
-                            row[timestamp_key], "%Y-%m-%d %H:%M:%S.%f"
-                        )
-
-                    # ログの Detector_X, Y を float に変換
-                    row["Detector_X"] = float(row["Detector_X"])
-                    row["Detector_Y"] = float(row["Detector_Y"])
-                    all_logs.append(row)
-    # タイムスタンプで全体をソート
-    all_logs.sort(key=lambda x: x["Timestamp"])
-    return all_logs
-
-
-def load_ground_truth_routes(file_path: str) -> dict[str, str]:
-    """
-    グランドトゥルースのウォーカールートを読み込む。
-    User_ID (Walker_ID) と真のRouteの対応。
-    """
-    ground_truth = {}
-    with open(file_path, "r") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            ground_truth[row["Walker_ID"]] = row["Route"]
-    return ground_truth
 
 
 def analyze_movements_with_clustering(
