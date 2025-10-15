@@ -2,9 +2,11 @@ import numpy as np
 from collections import defaultdict
 from utils.calculate_function import calculate_min_travel_time
 from domain.detector import Detector, load_detectors
-from utils.load import load_ground_truth_routes, load_logs
+from utils.load import load_ground_truth_routes, load_logs, load_simulation_settings
 
-WALKER_SPEED = 1.4  # 通行人の移動速度（m/s）
+WALKER_SPEED = load_simulation_settings("config/simulation_settings.json")[
+    "walker_speed"
+]
 
 
 def analyze_movements_with_clustering(
@@ -212,23 +214,10 @@ def evaluate_algorithm(
 
 
 def main():
-    detector_config_path = "config/detectors.json"
-    log_dir = "result"
-    ground_truth_path = "result/walker_routes.csv"
-
     # データの読み込み
-    detectors = load_detectors(detector_config_path)
-    logs = load_logs(log_dir)
-    ground_truth_routes = load_ground_truth_routes(ground_truth_path)
-
-    # 検出器の総数を取得 (N)
-    num_detectors = len(detectors)
-
-    print("--- データ読み込み完了 ---")
-    print(f"検出器数 (N): {num_detectors}")
-    print(f"ログエントリ数: {len(logs)}")
-    print(f"グランドトゥルースのウォーカー数: {len(ground_truth_routes)}")
-    print("-" * 30)
+    detectors = load_detectors("config/detectors.json")
+    logs = load_logs("result")
+    ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")
 
     # 移動経路の推定とありえない移動の排除、およびクラスタリング
     estimated_clustered_routes = analyze_movements_with_clustering(logs, detectors)
@@ -244,7 +233,7 @@ def main():
 
     # アルゴリズムの評価
     evaluation_results = evaluate_algorithm(
-        estimated_clustered_routes, ground_truth_routes, num_detectors
+        estimated_clustered_routes, ground_truth_routes, len(detectors)
     )
 
     print("\n--- 評価結果サマリー (ルートシーケンスごとのカウント) ---")
