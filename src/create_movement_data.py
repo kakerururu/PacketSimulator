@@ -3,63 +3,66 @@ import random
 from datetime import datetime, timedelta
 import os
 from collections import defaultdict
-
 from domain.detector import Detector, load_detectors
+from domain.simulation_entities import Walker, DetectionEvent
 from utils.calculate_function import calculate_travel_time
 from utils.load import load_payloads, load_simulation_settings
 
 
 # --- シミュレーション用データの生成 ---
-def generate_routes(detectors: dict[str, Detector], num_walkers: int) -> dict[str, str]:
+def generate_random_route_string(detectors: dict[str, Detector]) -> str:
     """
-    読み込んだ検出器のリストと通行人の数に基づいて、各通行人のランダムな移動ルートを生成する。
-    すべてのウォーカーがすべての検出器を1回ずつ通る、ランダムな順序のルートを生成。
-    例：Walker_1: "BACD"
+    指定された検出器のリストに基づいて、ランダムな順序のルート文字列を生成します。
+
+    例：ABCDという計4つの検知器を持つ場合、"ACBD"や"DBCA"などのランダムな順序の文字列を返します。
     """
     detector_ids = list(detectors.keys())
-    walker_routes = {}
-    for i in range(num_walkers):
-        route = list(detector_ids)  # 検出器IDのリストをコピー
-        random.shuffle(route)  # 順序をランダムにシャッフル
-        walker_routes[f"Walker_{i + 1}"] = "".join(
-            route
-        )  # ルートを文字列として保存 (例: "BACD")
-    return walker_routes
+    random.shuffle(detector_ids)
+    return "".join(detector_ids)
 
 
-def assign_models_to_walkers(
+def create_walkers(
     num_walkers: int,
+    detectors: dict[str, Detector],
     model_names: list[str],
     model_probabilities: list[float],
     payload_definitions: dict,
-) -> dict[str, dict]:
+) -> dict[str, Walker]:
     """
-    各ウォーカーに、指定された確率分布に基づいてスマートフォンモデルを割り当て、
-    必要であればユニークなペイロードIDを生成します。
-    戻り値: { "Walker_ID": {"model": "Model_Name", "assigned_payload_id": "UniquePayloadString_if_dynamic"} }
-    """
-    walker_details = {}
+    指定された数と設定に基づいて、Walkerオブジェクトの辞書を生成します。
+    各ウォーカーにランダムなルートとスマートフォンモデルを割り当てます。
+    返される辞書のキーはウォーカーID、値は対応するWalkerオブジェクトです。
 
+    例：{"Walker_1": Walker(...), "Walker_2": Walker(...)}
+    """
+    walkers = {}
     for i in range(num_walkers):
-        walker_id = f"Walker_{i + 1}"
+        walker_id = f"Walker_{i + 1}"  # ウォーカーIDを生成 1から始まる連番
+
         # 重み付きランダム選択でモデルを割り当て
+        # モデル名のリストとその選択確率のリストを受け取り、1つ選択
         assigned_model_name = random.choices(
             model_names, weights=model_probabilities, k=1
         )[0]
 
-        assigned_payload_id = None
-        # もし割り当てられたモデルが動的にユニークなペイロードを生成するタイプなら
+        assigned_payload_id = (
+            None  # 静的モデルの場合は確率分布に基づいて選択するため、ここはNoneに設定
+        )
+
+        # もし割り当てられたモデルが動的にユニークなペイロードを生成するタイプなら、ここでペイロードの中身を設定
         if (
             "dynamic_unique_payload" in payload_definitions[assigned_model_name]
             and payload_definitions[assigned_model_name]["dynamic_unique_payload"]
         ):
             assigned_payload_id = f"DynamicUniquePayload_Walker_{walker_id}"
 
-        walker_details[walker_id] = {
-            "model": assigned_model_name,
-            "assigned_payload_id": assigned_payload_id,  # 動的ペイロードのID、静的モデルの場合はNone
-        }
-    return walker_details
+        walkers[walker_id] = Walker(
+            id=walker_id,
+            model=assigned_model_name,
+            assigned_payload_id=assigned_payload_id,
+            route=generate_random_route_string(detectors),
+        )
+    return walkers
 
 
 def choose_payload_for_model(
@@ -87,8 +90,7 @@ def choose_payload_for_model(
 # --- シミュレーションの実行 ---
 def simulate(
     detectors: dict[str, Detector],
-    walker_routes: dict[str, str],
-    walker_details: dict[str, dict],
+    walkers: dict[str, Walker],  # Walkerオブジェクトの辞書を受け取る
     payload_distributions: dict,
     payloads_per_detector: int,
     walker_speed: float,
@@ -110,17 +112,13 @@ def simulate(
         writer = csv.writer(f)
         writer.writerow(
             ["Walker_ID", "Route", "Model", "Assigned_Hashed_Payload_If_Dynamic"]
-        )  # 新しい列を追加
-        for walker_id, details in walker_details.items():
-            route_str = walker_routes[walker_id]
-            # 動的ペイロードの場合、そのIDを記録
+        )
+        for walker_id, walker in walkers.items():
             assigned_payload_info = (
-                details["assigned_payload_id"]
-                if details["assigned_payload_id"]
-                else "N/A"
+                walker.assigned_payload_id if walker.assigned_payload_id else "N/A"
             )
             writer.writerow(
-                [walker_id, route_str, details["model"], assigned_payload_info]
+                [walker.id, walker.route, walker.model, assigned_payload_info]
             )
 
     # 検出器ごとのログデータを一時的に保持
@@ -129,14 +127,12 @@ def simulate(
     # シミュレーション開始時刻
     start_time = datetime(2024, 1, 14, 11, 0, 0)
 
-    for walker_id, details in walker_details.items():
+    for walker_id, walker in walkers.items():
         current_time = start_time
-        assigned_model_name = details["model"]
-        assigned_payload_id_for_walker = details[
-            "assigned_payload_id"
-        ]  # 動的に割り当てられたペイロードID (グループA用)
+        assigned_model_name = walker.model
+        assigned_payload_id_for_walker = walker.assigned_payload_id
 
-        route_str = walker_routes[walker_id]
+        route_str = walker.route
         route_detectors = [detectors[d_id] for d_id in route_str]
 
         for i in range(len(route_detectors)):
@@ -155,16 +151,16 @@ def simulate(
                     payload_distributions,
                 )
 
-                # ログエントリを記録
+                # ログエントリをDetectionEventオブジェクトとして記録
                 detector_logs[current_detector.id].append(
-                    {
-                        "Timestamp": event_time,
-                        "Walker_ID": walker_id,
-                        "Hashed_Payload": chosen_payload,
-                        "Detector_ID": current_detector.id,
-                        "Detector_X": current_detector.x,
-                        "Detector_Y": current_detector.y,
-                    }
+                    DetectionEvent(
+                        timestamp=event_time,
+                        walker_id=walker.id,
+                        hashed_payload=chosen_payload,
+                        detector_id=current_detector.id,
+                        detector_x=current_detector.x,
+                        detector_y=current_detector.y,
+                    )
                 )
 
             # 次の検出器への移動
@@ -176,18 +172,17 @@ def simulate(
                     next_detector.x,
                     next_detector.y,
                     walker_speed,
-                    variation_factor,  # パラメータとして受け取った値を使用
+                    variation_factor,
                 )
-                current_time += timedelta(
-                    seconds=travel_duration
-                )  # 次の検出器への移動時間を加算
+                current_time += timedelta(seconds=travel_duration)
             else:
-                # 最終検出器で少し滞在する時間を追加 (次のウォーカーの開始に影響しないよう)
                 current_time += timedelta(minutes=random.randint(1, 5))
 
     # 各検出器のログをファイルに書き出し、タイムスタンプでソート
     for det_id, logs in detector_logs.items():
-        logs.sort(key=lambda x: x["Timestamp"])  # 各検出器内のログをソート
+        logs.sort(
+            key=lambda x: x.timestamp
+        )  # DetectionEventオブジェクトのtimestampでソート
         file_path = os.path.join(results_dir, f"{det_id}_log.csv")
         with open(file_path, "w", newline="") as f:
             fieldnames = [
@@ -201,11 +196,19 @@ def simulate(
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for entry in logs:
-                # タイムスタンプは文字列形式で書き出す
-                entry["Timestamp"] = entry["Timestamp"].strftime(
-                    "%Y-%m-%d %H:%M:%S.%f"
-                )[:-3]  # ミリ秒を3桁に
-                writer.writerow(entry)
+                # DetectionEventオブジェクトの属性からデータを書き出す
+                writer.writerow(
+                    {
+                        "Timestamp": entry.timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[
+                            :-3
+                        ],
+                        "Walker_ID": entry.walker_id,
+                        "Hashed_Payload": entry.hashed_payload,
+                        "Detector_ID": entry.detector_id,
+                        "Detector_X": entry.detector_x,
+                        "Detector_Y": entry.detector_y,
+                    }
+                )
 
     print(f"シミュレーションログを '{results_dir}' フォルダに生成しました。")
 
@@ -234,27 +237,25 @@ def main():
     variation_factor = simulation_settings["variation_factor"]
 
     print(f"検出器数: {len(detectors)}")
-    print(
-        f"利用可能なモデル: {model_names} (確率: {[f'{p:.2f}' for p in model_probabilities]})"
-    )
     print(f"シミュレートするウォーカー数: {num_walkers_to_simulate}人")
     print(
         f"各検出器でウォーカーあたりに放出されるペイロード数: {payloads_per_detector_per_walker}個"
     )
     print(f"ウォーカーの移動速度: {walker_speed} m/s")
-    print(f"移動時間のばらつき要因: {variation_factor}")
 
-    # ウォーカーごとのルートとモデルを生成
-    walker_routes = generate_routes(detectors, num_walkers_to_simulate)
-    walker_details = assign_models_to_walkers(
-        num_walkers_to_simulate, model_names, model_probabilities, payload_distributions
+    # ウォーカーオブジェクトを生成
+    walkers = create_walkers(
+        num_walkers_to_simulate,
+        detectors,
+        model_names,
+        model_probabilities,
+        payload_distributions,
     )
 
     # シミュレーション実行
     simulate(
         detectors,
-        walker_routes,
-        walker_details,
+        walkers,  # Walkerオブジェクトの辞書を渡す
         payload_distributions,
         payloads_per_detector_per_walker,
         walker_speed,
