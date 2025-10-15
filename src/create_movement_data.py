@@ -12,8 +12,9 @@ from utils.load import load_payloads, load_simulation_settings
 # --- シミュレーション用データの生成 ---
 def generate_routes(detectors: dict[str, Detector], num_walkers: int) -> dict[str, str]:
     """
-    指定された検出器のリストと通行人の数に基づいて、各通行人のランダムな移動ルートを生成します。
+    読み込んだ検出器のリストと通行人の数に基づいて、各通行人のランダムな移動ルートを生成する。
     すべてのウォーカーがすべての検出器を1回ずつ通る、ランダムな順序のルートを生成。
+    例：Walker_1: "BACD"
     """
     detector_ids = list(detectors.keys())
     walker_routes = {}
