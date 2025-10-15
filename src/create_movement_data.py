@@ -72,10 +72,12 @@ def choose_payload_for_model(
     指定されたモデルの確率分布に基づいて、ペイロードをランダムに選択します。
     動的ペイロードの場合は、割り当てられたIDをそのまま返します。
     """
-    if assigned_payload_id:  # このウォーカーに動的ペイロードが割り当てられている場合
+    if (
+        assigned_payload_id
+    ):  # このウォーカーに動的ペイロードが割り当てられている場合はそのまま
         return assigned_payload_id
 
-    # 静的に定義されたペイロード分布から選択
+    # 静的に定義されたペイロード分布を取得
     distribution = payload_distributions.get(model_name)
     if not distribution:
         raise ValueError(f"Payload distribution for model '{model_name}' not found.")
@@ -83,7 +85,8 @@ def choose_payload_for_model(
     payload_types = list(distribution.keys())
     probabilities = list(distribution.values())
 
-    chosen_payload = random.choices(payload_types, weights=probabilities, k=1)[0]
+    # モデルごとに定義された確率分布に基づいてペイロードを1つ選択
+    chosen_payload: str = random.choices(payload_types, weights=probabilities, k=1)[0]
     return chosen_payload
 
 
@@ -145,6 +148,7 @@ def simulate(
                 event_time = current_time + timedelta(seconds=offset_seconds)
 
                 # ペイロードをランダムに選択（動的ペイロードの場合はそれを優先）
+                # ここで毎回ペイロードを確率分布に基づいて選択
                 chosen_payload = choose_payload_for_model(
                     assigned_model_name,
                     assigned_payload_id_for_walker,
@@ -215,18 +219,12 @@ def simulate(
 
 # --- メイン実行部分 ---
 def main():
-    detector_config_path = "config/detectors.json"
-    payloads_config_path = "config/payloads.json"
-    simulation_settings_path = "config/simulation_settings.json"  # 新しい設定ファイル
-
     # 設定データの読み込み
-    detectors = load_detectors(detector_config_path)
+    detectors = load_detectors("config/detectors.json")
     payload_distributions, model_names, model_probabilities = load_payloads(
-        payloads_config_path
+        "config/payloads.json"
     )
-    simulation_settings = load_simulation_settings(
-        simulation_settings_path
-    )  # 設定を読み込む
+    simulation_settings = load_simulation_settings("config/simulation_settings.json")
 
     # 設定値を変数に格納
     num_walkers_to_simulate = simulation_settings["num_walkers_to_simulate"]
