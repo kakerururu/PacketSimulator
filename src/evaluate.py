@@ -5,10 +5,10 @@ from utils.load import load_ground_truth_routes, load_logs, load_simulation_sett
 from domain.analysis_results import (
     RouteAnalysisResult,
 )
-from utils.event_processing import (
+from utils.collect_sort_all_events import (
     collect_and_sort_events,
-    classify_events_by_impossible_move,
 )
+from classify_logic.by_impossible_move import classify_events_by_impossible_move
 
 
 def analyze_movements_with_clustering(
