@@ -7,7 +7,7 @@ from domain.analysis_results import (
 )
 from utils.event_processing import (
     collect_and_sort_events,
-    process_payload_events_for_clustering,
+    classify_events_by_impossible_move,
 )
 
 
@@ -26,7 +26,7 @@ def analyze_movements_with_clustering(
     events_per_record_per_payload = collect_and_sort_events(logs, detectors)
 
     # 2. 移動経路のクラスタリング (PayloadEventsCollection オブジェクトを渡す)
-    estimated_routes_per_payload = process_payload_events_for_clustering(
+    estimated_routes_per_payload = classify_events_by_impossible_move(
         events_per_record_per_payload, detectors, walker_speed
     )
 
@@ -52,6 +52,8 @@ def evaluate_algorithm(
     for walker_id, route_str in ground_truth_routes.items():
         if len(route_str) == num_detectors:  # 真のルートは必ずN個の検出器を経由する前提
             true_route_counts[route_str] += 1
+    # print(true_route_counts.items())
+    # dict_items([('BCDA', 1), ('CDBA', 1), ('BDAC', 1)])
 
     # 推定されたルートシーケンスの出現回数をカウント
     # ここで、推定されたルートがnum_detectorsの数と一致しない場合は除外

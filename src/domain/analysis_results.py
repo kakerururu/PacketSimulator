@@ -15,7 +15,7 @@ class RouteAnalysisResult:
 
 
 @dataclass
-class CollectedEvent:
+class Event:
     """
     _collect_and_sort_events 関数によって収集される個々の検出イベントデータ。
     """
@@ -33,13 +33,13 @@ class PayloadEventsCollection:
     具体例：{"payload_1": [event1, event2], "payload_2": [event3], ...}
     """
 
-    events_by_payload: Dict[str, List[CollectedEvent]]
+    events_by_payload: Dict[str, List[Event]]
 
 
 @dataclass
 class ClusteredRoutes:
     """
-    process_payload_events_for_clustering 関数によって生成される
+    classify_events_by_impossible_move 関数によって生成される
     Hashed_Payload ごとのクラスタリングされたルートのコレクション。
     """
 
