@@ -7,6 +7,7 @@ from typing import Dict, List
 class RouteAnalysisResult:
     """
     移動経路分析の結果を保持するデータクラス。
+    具体例：{"estimated_clustered_routes": {"cluster_1": "A-B-C", "cluster_2": "A-C-B"}, ...}
     """
 
     estimated_clustered_routes: Dict[str, str]  # キー: クラスタID, 値: 推定ルート文字列

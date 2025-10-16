@@ -12,7 +12,9 @@ from domain.analysis_results import (
 def collect_and_sort_events(
     logs: List[Dict[str, Any]], detectors: Dict[str, Detector]
 ) -> PayloadEventsCollection:
-    """ログデータからHashed_Payloadごとのイベントを収集し、時間順にソートする"""
+    """ログデータからHashed_Payloadごとのイベントを収集し、時間順にソートする
+    具体例：{"payload_1": [event1, event2], "payload_2": [event3], ...}
+    """
     payload_events_raw = defaultdict(list)
     for log_entry in logs:
         current_detector_id = None

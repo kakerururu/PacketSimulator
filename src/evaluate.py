@@ -8,10 +8,9 @@ from domain.analysis_results import (
 from utils.event_processing import (
     collect_and_sort_events,
     process_payload_events_for_clustering,
-)  # ヘルパー関数をインポート
+)
 
 
-# --- ヘルパー関数 ---
 def analyze_movements_with_clustering(
     logs: list[dict], detectors: dict[str, Detector]
 ) -> RouteAnalysisResult:  # 戻り値の型を変更
@@ -24,17 +23,17 @@ def analyze_movements_with_clustering(
     walker_speed = simulation_settings["walker_speed"]
 
     # 1. イベントの収集とソート (PayloadEventsCollection オブジェクトを返す)
-    payload_events_collection = collect_and_sort_events(logs, detectors)
+    events_per_record_per_payload = collect_and_sort_events(logs, detectors)
 
     # 2. 移動経路のクラスタリング (PayloadEventsCollection オブジェクトを渡す)
-    estimated_clustered_routes_obj = process_payload_events_for_clustering(
-        payload_events_collection, detectors, walker_speed
+    estimated_routes_per_payload = process_payload_events_for_clustering(
+        events_per_record_per_payload, detectors, walker_speed
     )
 
     # 結果を RouteAnalysisResult オブジェクトに格納して返す
     # ClusteredRoutes オブジェクトから辞書を取り出して渡す
     return RouteAnalysisResult(
-        estimated_clustered_routes=estimated_clustered_routes_obj.routes_by_cluster_id
+        estimated_clustered_routes=estimated_routes_per_payload.routes_by_cluster_id
     )
 
 
