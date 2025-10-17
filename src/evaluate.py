@@ -8,7 +8,11 @@ from domain.analysis_results import (
 from utils.collect_sort_all_events import (
     collect_and_sort_events,
 )
+from utils.export_payload_events import export_payload_events
 from classify_logic.by_impossible_move import classify_events_by_impossible_move
+from classify_logic.by_impossible_move_and_window import (
+    classify_events_by_impossible_move_and_window,
+)
 
 
 def analyze_movements_with_clustering(
@@ -24,11 +28,21 @@ def analyze_movements_with_clustering(
 
     # 1. イベントの収集とソート (PayloadEventsCollection オブジェクトを返す)
     events_per_record_per_payload = collect_and_sort_events(logs, detectors)
+    # 収集・ソート済みイベントをペイロードごとにCSV書き出し
+    export_payload_events(
+        events_per_record_per_payload,
+        output_dir="result/payload_events",
+        include_index=False,
+        gzip_compress=False,
+    )
 
     # 2. 移動経路のクラスタリング (PayloadEventsCollection オブジェクトを渡す)
     estimated_routes_per_payload = classify_events_by_impossible_move(
         events_per_record_per_payload, detectors, walker_speed
     )
+    # estimated_routes_per_payload = classify_events_by_impossible_move_and_window(
+    #     events_per_record_per_payload, detectors, walker_speed
+    # )
 
     # 結果を RouteAnalysisResult オブジェクトに格納して返す
     # ClusteredRoutes オブジェクトから辞書を取り出して渡す
@@ -139,8 +153,10 @@ def evaluate_algorithm(
 def main():
     # データの読み込み
     detectors = load_detectors("config/detectors.json")
-    logs = load_logs("result")
-    ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")
+    # logs = load_logs("result")
+    logs = load_logs("test_data")  # テストデータで試す場合
+    # ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")
+    ground_truth_routes = load_ground_truth_routes("test_data/walker_routes.csv")
 
     # 移動経路の推定とありえない移動の排除、およびクラスタリング
     analysis_result = analyze_movements_with_clustering(
