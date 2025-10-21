@@ -70,7 +70,14 @@ def export_payload_events(
         with f_open(file_path, mode, newline="") as f:
             writer = csv.writer(f)
             writer.writerow(
-                ["Payload_ID", "Timestamp", "Detector_ID", "Detector_X", "Detector_Y"]
+                [
+                    "Payload_ID",
+                    "Timestamp",
+                    "Detector_ID",
+                    "Detector_X",
+                    "Detector_Y",
+                    "Sequence_Number",
+                ]
             )
             for ev in events:  # ev: CollectedEvent
                 writer.writerow(
@@ -80,6 +87,7 @@ def export_payload_events(
                         ev.detector_id,
                         f"{ev.detector_x:.6f}",
                         f"{ev.detector_y:.6f}",
+                        ev.sequence_number,
                     ]
                 )
 
