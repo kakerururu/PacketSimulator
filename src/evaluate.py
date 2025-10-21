@@ -1,117 +1,67 @@
 import numpy as np
 from collections import defaultdict
-from utils.calculate_function import calculate_min_travel_time
 from domain.detector import Detector, load_detectors
-from utils.load import load_ground_truth_routes, load_logs
+from utils.load import load_ground_truth_routes, load_logs, load_simulation_settings
+from domain.analysis_results import (
+    RouteAnalysisResult,
+)
+from utils.collect_sort_all_events import (
+    collect_and_sort_events,
+)
+from utils.export_payload_events import export_payload_events
+from classify_logic.by_impossible_move import classify_events_by_impossible_move
+from classify_logic.by_impossible_move_and_window import (
+    classify_events_by_impossible_move_and_window,
+)
+from classify_logic.window_max import classify_events_window_max
 
-WALKER_SPEED = 1.4  # 通行人の移動速度（m/s）
+logic_name = "by_impossible_move"
+# logic_name = "by_impossible_move_and_window"
+# logic_name = "window_max"
 
 
 def analyze_movements_with_clustering(
     logs: list[dict], detectors: dict[str, Detector]
-) -> dict[str, str]:
+) -> RouteAnalysisResult:  # 戻り値の型を変更
     """
     ログデータからHashed_Payloadごとのイベントを分析し、
     ありえない移動があった場合に新しいクラスタIDを割り当てる。
     """
-    # Hashed_Payload ごとのイベントを収集
-    payload_events = defaultdict(list)
-    for log_entry in logs:
-        # Detector_X と Detector_Y から検出器IDを特定
-        current_detector_id = None
-        for det_id, det_obj in detectors.items():
-            if (
-                det_obj.x == log_entry["Detector_X"]
-                and det_obj.y == log_entry["Detector_Y"]
-            ):
-                current_detector_id = det_id
-                break
-        if current_detector_id:
-            payload_events[log_entry["Hashed_Payload"]].append(
-                {
-                    "Timestamp": log_entry["Timestamp"],
-                    "Detector_ID": current_detector_id,
-                    "Detector_X": log_entry["Detector_X"],
-                    "Detector_Y": log_entry["Detector_Y"],
-                }
-            )
+    # シミュレーション設定を一度だけロード
+    simulation_settings = load_simulation_settings("config/simulation_settings.json")
+    walker_speed = simulation_settings["walker_speed"]
 
-    # 各 Hashed_Payload のイベントを時間でソート
-    for payload_id in payload_events:
-        payload_events[payload_id].sort(key=lambda x: x["Timestamp"])
+    # 1. イベントの収集とソート (PayloadEventsCollection オブジェクトを返す)
+    events_per_record_per_payload = collect_and_sort_events(logs, detectors)
+    # 収集・ソート済みイベントをペイロードごとにCSV書き出し
+    export_payload_events(
+        events_per_record_per_payload,
+        output_dir="result/payload_events",
+        include_index=False,
+        gzip_compress=False,
+    )
 
-    estimated_clustered_routes = {}  # キーは仮想的なクラスタID (例: "payloadX_cluster1")
-    cluster_counter = defaultdict(int)  # 各Hashed_Payloadに対するクラスタ番号を管理
+    # 2. 移動経路のクラスタリング (PayloadEventsCollection オブジェクトを渡す)
+    if logic_name == "by_impossible_move":
+        estimated_routes_per_payload = classify_events_by_impossible_move(
+            events_per_record_per_payload, detectors, walker_speed
+        )
+    elif logic_name == "by_impossible_move_and_window":
+        estimated_routes_per_payload = classify_events_by_impossible_move_and_window(
+            events_per_record_per_payload, detectors, walker_speed
+        )
+    elif logic_name == "window_max":
+        estimated_routes_per_payload = classify_events_window_max(
+            events_per_record_per_payload, detectors, walker_speed
+        )
+    else:
+        raise ValueError(f"Unknown classification logic: {logic_name}")
 
-    # 各 Hashed_Payload のイベントシーケンスを分析
-    for payload_id, events in payload_events.items():
-        if not events:
-            continue
-
-        current_route_sequence_list = []
-
-        # 最初のイベントで最初のクラスタとルートを開始
-        cluster_counter[payload_id] += 1
-        current_cluster_id = f"{payload_id}_cluster{cluster_counter[payload_id]}"
-        current_route_sequence_list.append(events[0]["Detector_ID"])
-
-        prev_event = events[0]
-
-        for i in range(1, len(events)):
-            current_event = events[i]
-
-            prev_det_id = prev_event["Detector_ID"]
-            current_det_id = current_event["Detector_ID"]
-
-            # 同じ検出器での連続した検出は、ルートシーケンスに重複して追加しない
-            if current_det_id == current_route_sequence_list[-1]:
-                prev_event = current_event
-                continue
-
-            # 移動時間のチェック
-            time_diff = (
-                current_event["Timestamp"] - prev_event["Timestamp"]
-            ).total_seconds()
-
-            det1_obj = detectors[prev_det_id]
-            det2_obj = detectors[current_det_id]
-
-            min_travel_time = calculate_min_travel_time(
-                det1_obj, det2_obj, WALKER_SPEED
-            )
-
-            # ありえない移動の場合：現在のルートシーケンスを確定し、新しいクラスタを開始
-            # 閾値は min_travel_time * 0.8
-            if time_diff < min_travel_time * 0.8:
-                # これまでのルートシーケンスを確定して保存
-                # ルートが有効（少なくとも2つの異なる検出器を含む）な場合のみ保存
-                if len(current_route_sequence_list) > 1:
-                    estimated_clustered_routes[current_cluster_id] = "".join(
-                        current_route_sequence_list
-                    )
-
-                # 新しいクラスタの開始
-                cluster_counter[payload_id] += 1
-                current_cluster_id = (
-                    f"{payload_id}_cluster{cluster_counter[payload_id]}"
-                )
-                current_route_sequence_list = [
-                    current_det_id
-                ]  # 新しいルートは現在の検出器から開始
-                prev_event = current_event  # 新しいクラスタの最初のイベントとして設定
-                continue  # 次のイベントへ
-
-            # 有効な移動として、ルートシーケンスに追加
-            current_route_sequence_list.append(current_det_id)
-            prev_event = current_event  # 次の比較のためにprev_eventを更新
-
-        # ループ終了後、最後に構築中のルートシーケンスを確定して保存
-        if len(current_route_sequence_list) > 1:
-            estimated_clustered_routes[current_cluster_id] = "".join(
-                current_route_sequence_list
-            )
-
-    return estimated_clustered_routes
+    # 結果を RouteAnalysisResult オブジェクトに格納して返す
+    # ClusteredRoutes オブジェクトから辞書を取り出して渡す
+    return RouteAnalysisResult(
+        estimated_clustered_routes=estimated_routes_per_payload.routes_by_cluster_id
+    )
 
 
 def evaluate_algorithm(
@@ -129,6 +79,8 @@ def evaluate_algorithm(
     for walker_id, route_str in ground_truth_routes.items():
         if len(route_str) == num_detectors:  # 真のルートは必ずN個の検出器を経由する前提
             true_route_counts[route_str] += 1
+    # print(true_route_counts.items())
+    # dict_items([('BCDA', 1), ('CDBA', 1), ('BDAC', 1)])
 
     # 推定されたルートシーケンスの出現回数をカウント
     # ここで、推定されたルートがnum_detectorsの数と一致しない場合は除外
@@ -212,26 +164,20 @@ def evaluate_algorithm(
 
 
 def main():
-    detector_config_path = "config/detectors.json"
-    log_dir = "result"
-    ground_truth_path = "result/walker_routes.csv"
-
     # データの読み込み
-    detectors = load_detectors(detector_config_path)
-    logs = load_logs(log_dir)
-    ground_truth_routes = load_ground_truth_routes(ground_truth_path)
-
-    # 検出器の総数を取得 (N)
-    num_detectors = len(detectors)
-
-    print("--- データ読み込み完了 ---")
-    print(f"検出器数 (N): {num_detectors}")
-    print(f"ログエントリ数: {len(logs)}")
-    print(f"グランドトゥルースのウォーカー数: {len(ground_truth_routes)}")
-    print("-" * 30)
+    detectors = load_detectors("config/detectors.json")
+    logs = load_logs("result")
+    # logs = load_logs("test_data")  # テストデータで試す場合
+    ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")
+    # ground_truth_routes = load_ground_truth_routes("test_data/walker_routes.csv")
 
     # 移動経路の推定とありえない移動の排除、およびクラスタリング
-    estimated_clustered_routes = analyze_movements_with_clustering(logs, detectors)
+    analysis_result = analyze_movements_with_clustering(
+        logs, detectors
+    )  # 戻り値の型を変更
+    estimated_clustered_routes = (
+        analysis_result.estimated_clustered_routes
+    )  # オブジェクトからルートを取得
 
     print("\n--- 推定結果 (クラスタリング後の推定ルート) ---")
     # クラスタIDごとのルートを出力
@@ -244,7 +190,7 @@ def main():
 
     # アルゴリズムの評価
     evaluation_results = evaluate_algorithm(
-        estimated_clustered_routes, ground_truth_routes, num_detectors
+        estimated_clustered_routes, ground_truth_routes, len(detectors)
     )
 
     print("\n--- 評価結果サマリー (ルートシーケンスごとのカウント) ---")
