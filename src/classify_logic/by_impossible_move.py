@@ -71,6 +71,15 @@ def classify_events_by_impossible_move(
                         current_route_sequence_list
                     )
 
+                # ログを出力（デバッグ用）
+                print(
+                    f"Impossible move detected for payload {payload_id} between detectors {prev_event_detector_id} and {current_event_detector_id}. Time diff: {time_diff:.2f}s, Min travel time: {min_travel_time:.2f}s"
+                )
+                # 推定されたルートを出力
+                print(
+                    f"クラスタID {current_cluster_id}:推定ルート {''.join(current_route_sequence_list)}"
+                )
+
                 # 新しいクラスタを作成するため、クラスタ番号をインクリメント
                 cluster_counter[payload_id] += 1
                 # 新しいクラスタIDを生成

@@ -13,6 +13,11 @@ from classify_logic.by_impossible_move import classify_events_by_impossible_move
 from classify_logic.by_impossible_move_and_window import (
     classify_events_by_impossible_move_and_window,
 )
+from classify_logic.window_max import classify_events_window_max
+
+logic_name = "by_impossible_move"
+# logic_name = "by_impossible_move_and_window"
+# logic_name = "window_max"
 
 
 def analyze_movements_with_clustering(
@@ -37,12 +42,20 @@ def analyze_movements_with_clustering(
     )
 
     # 2. 移動経路のクラスタリング (PayloadEventsCollection オブジェクトを渡す)
-    estimated_routes_per_payload = classify_events_by_impossible_move(
-        events_per_record_per_payload, detectors, walker_speed
-    )
-    # estimated_routes_per_payload = classify_events_by_impossible_move_and_window(
-    #     events_per_record_per_payload, detectors, walker_speed
-    # )
+    if logic_name == "by_impossible_move":
+        estimated_routes_per_payload = classify_events_by_impossible_move(
+            events_per_record_per_payload, detectors, walker_speed
+        )
+    elif logic_name == "by_impossible_move_and_window":
+        estimated_routes_per_payload = classify_events_by_impossible_move_and_window(
+            events_per_record_per_payload, detectors, walker_speed
+        )
+    elif logic_name == "window_max":
+        estimated_routes_per_payload = classify_events_window_max(
+            events_per_record_per_payload, detectors, walker_speed
+        )
+    else:
+        raise ValueError(f"Unknown classification logic: {logic_name}")
 
     # 結果を RouteAnalysisResult オブジェクトに格納して返す
     # ClusteredRoutes オブジェクトから辞書を取り出して渡す
@@ -153,10 +166,10 @@ def evaluate_algorithm(
 def main():
     # データの読み込み
     detectors = load_detectors("config/detectors.json")
-    # logs = load_logs("result")
-    logs = load_logs("test_data")  # テストデータで試す場合
-    # ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")
-    ground_truth_routes = load_ground_truth_routes("test_data/walker_routes.csv")
+    logs = load_logs("result")
+    # logs = load_logs("test_data")  # テストデータで試す場合
+    ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")
+    # ground_truth_routes = load_ground_truth_routes("test_data/walker_routes.csv")
 
     # 移動経路の推定とありえない移動の排除、およびクラスタリング
     analysis_result = analyze_movements_with_clustering(
