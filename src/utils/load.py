@@ -33,6 +33,8 @@ def load_logs(log_dir: str) -> list[dict]:
                     # ログの Detector_X, Y を float に変換
                     row["Detector_X"] = float(row["Detector_X"])
                     row["Detector_Y"] = float(row["Detector_Y"])
+                    # Sequence_Number を int に変換して追加
+                    row["Sequence_Number"] = int(row["Sequence_Number"])
                     all_logs.append(row)
     # タイムスタンプで全体をソート
     all_logs.sort(key=lambda x: x["Timestamp"])
