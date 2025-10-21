@@ -31,3 +31,4 @@ class DetectionEvent:
     detector_id: str
     detector_x: float
     detector_y: float
+    sequence_number: int
