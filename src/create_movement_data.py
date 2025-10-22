@@ -98,6 +98,7 @@ def simulate(
     payloads_per_detector: int,
     walker_speed: float,
     variation_factor: float,
+    num_consecutive_payloads: int,
 ):
     """
     スマートフォンの検出シミュレーションを実行し、ログファイルを生成します。
@@ -141,22 +142,58 @@ def simulate(
         for i in range(len(route_detectors)):
             current_detector = route_detectors[i]
 
-            # 検出器に到達した際のイベントを生成（ペイロード放出数を変数で制御）
-            for _ in range(payloads_per_detector):
-                # ランダムなオフセット（最大5分 = 300秒）
+            # 生成するペイロードイベントを一時的に保持するリスト
+            events_to_add = []
+
+            # 連続ペイロードの生成
+            if num_consecutive_payloads > 0:
+                # 連続ペイロードの開始オフセットをランダムに決定
+                # random.randintの引数は整数である必要があるため、int()で変換
+                consecutive_start_offset = random.randint(
+                    0, int(300 - (num_consecutive_payloads * 0.001))
+                )
+                current_sequence_number = random.randint(
+                    0, 4095
+                )  # 最初の連続ペイロードのシーケンス番号
+
+                for k in range(num_consecutive_payloads):
+                    event_time = (
+                        current_time
+                        + timedelta(seconds=consecutive_start_offset)
+                        + timedelta(milliseconds=k)
+                    )
+                    chosen_payload = choose_payload_for_model(
+                        assigned_model_name,
+                        assigned_payload_id_for_walker,
+                        payload_distributions,
+                    )
+                    events_to_add.append(
+                        DetectionEvent(
+                            timestamp=event_time,
+                            walker_id=walker.id,
+                            hashed_payload=chosen_payload,
+                            detector_id=current_detector.id,
+                            detector_x=current_detector.x,
+                            detector_y=current_detector.y,
+                            sequence_number=current_sequence_number,
+                        )
+                    )
+                    current_sequence_number = (
+                        current_sequence_number + 1
+                    ) % 4096  # 次のシーケンス番号
+
+            # 残りのペイロード（連続ペイロード以外の部分）の生成
+            num_random_payloads = payloads_per_detector - num_consecutive_payloads
+            for _ in range(num_random_payloads):
                 offset_seconds = random.randint(0, 300)
                 event_time = current_time + timedelta(seconds=offset_seconds)
-
-                # ペイロードをランダムに選択（動的ペイロードの場合はそれを優先）
-                # ここで毎回ペイロードを確率分布に基づいて選択
                 chosen_payload = choose_payload_for_model(
                     assigned_model_name,
                     assigned_payload_id_for_walker,
                     payload_distributions,
                 )
-
-                # ログエントリをDetectionEventオブジェクトとして記録
-                detector_logs[current_detector.id].append(
+                random_sequence_number = random.randint(0, 4095)
+                events_to_add.append(
                     DetectionEvent(
                         timestamp=event_time,
                         walker_id=walker.id,
@@ -164,8 +201,13 @@ def simulate(
                         detector_id=current_detector.id,
                         detector_x=current_detector.x,
                         detector_y=current_detector.y,
+                        sequence_number=random_sequence_number,
                     )
                 )
+
+            # 生成されたすべてのイベントをタイムスタンプでソートして追加
+            events_to_add.sort(key=lambda x: x.timestamp)
+            detector_logs[current_detector.id].extend(events_to_add)
 
             # 次の検出器への移動
             if i < len(route_detectors) - 1:
@@ -196,6 +238,7 @@ def simulate(
                 "Detector_ID",
                 "Detector_X",
                 "Detector_Y",
+                "Sequence_Number",
             ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -211,6 +254,7 @@ def simulate(
                         "Detector_ID": entry.detector_id,
                         "Detector_X": entry.detector_x,
                         "Detector_Y": entry.detector_y,
+                        "Sequence_Number": entry.sequence_number,
                     }
                 )
 
@@ -231,6 +275,7 @@ def main():
     payloads_per_detector_per_walker = simulation_settings[
         "payloads_per_detector_per_walker"
     ]
+    num_consecutive_payloads = simulation_settings["num_consecutive_payloads"]
     walker_speed = simulation_settings["walker_speed"]
     variation_factor = simulation_settings["variation_factor"]
 
@@ -258,6 +303,7 @@ def main():
         payloads_per_detector_per_walker,
         walker_speed,
         variation_factor,
+        num_consecutive_payloads,
     )
 
 
