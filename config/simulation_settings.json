@@ -1,7 +1,8 @@
 {
     "simulation_settings": {
-        "num_walkers_to_simulate": 7,
+        "num_walkers_to_simulate": 3,
         "payloads_per_detector_per_walker": 10,
+        "num_consecutive_payloads": 3,
         "walker_speed": 1.4,
         "variation_factor": 0.1
     }

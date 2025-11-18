@@ -31,6 +31,7 @@ def collect_and_sort_events(
                     detector_id=current_detector_id,
                     detector_x=log_entry["Detector_X"],
                     detector_y=log_entry["Detector_Y"],
+                    sequence_number=log_entry["Sequence_Number"],  # 追加
                 )
             )
 
