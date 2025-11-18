@@ -28,7 +28,7 @@ def analyze_movements_with_clustering(
     ありえない移動があった場合に新しいクラスタIDを割り当てる。
     """
     # シミュレーション設定を一度だけロード
-    simulation_settings = load_simulation_settings("config/simulation_settings.json")
+    simulation_settings = load_simulation_settings("config/simulation_settings.jsonc")
     walker_speed = simulation_settings["walker_speed"]
 
     # 1. イベントの収集とソート (PayloadEventsCollection オブジェクトを返す)
@@ -165,7 +165,7 @@ def evaluate_algorithm(
 
 def main():
     # データの読み込み
-    detectors = load_detectors("config/detectors.json")
+    detectors = load_detectors("config/detectors.jsonc")
     logs = load_logs("result")
     # logs = load_logs("test_data")  # テストデータで試す場合
     ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")

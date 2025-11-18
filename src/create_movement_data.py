@@ -264,11 +264,11 @@ def simulate(
 # --- メイン実行部分 ---
 def main():
     # 設定データの読み込み
-    detectors = load_detectors("config/detectors.json")
+    detectors = load_detectors("config/detectors.jsonc")
     payload_distributions, model_names, model_probabilities = load_payloads(
-        "config/payloads.json"
+        "config/payloads.jsonc"
     )
-    simulation_settings = load_simulation_settings("config/simulation_settings.json")
+    simulation_settings = load_simulation_settings("config/simulation_settings.jsonc")
 
     # 設定値を変数に格納
     num_walkers_to_simulate = simulation_settings["num_walkers_to_simulate"]

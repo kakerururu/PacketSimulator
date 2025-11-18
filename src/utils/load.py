@@ -56,7 +56,7 @@ def load_ground_truth_routes(file_path: str) -> dict[str, str]:
 
 # --- 設定ファイルの読み込み関数を追加 ---
 def load_simulation_settings(file_path: str) -> dict:
-    """JSONファイルからシミュレーション設定をロードする"""
+    """jsoncファイルからシミュレーション設定をロードする"""
     with open(file_path, "r") as file:
         data = json.load(file)
         return data["simulation_settings"]

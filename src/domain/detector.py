@@ -9,7 +9,7 @@ class Detector:
 
 
 def load_detectors(file_path: str) -> dict[str, Detector]:
-    """JSONファイルから検知器情報をロードし、IDをキー、バリューをDetectorオブジェクトとする辞書で返す"""
+    """jsoncファイルから検知器情報をロードし、IDをキー、バリューをDetectorオブジェクトとする辞書で返す"""
     with open(file_path, "r") as file:
         data = json.load(file)
         detectors: list[Detector] = []
