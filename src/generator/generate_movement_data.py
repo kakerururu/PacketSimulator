@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 import os
 from collections import defaultdict
 from domain.detector import Detector, load_detectors
-from domain.simulation_entities import Walker, DetectionEvent
+from domain.walker import Walker
+from domain.record import DetectionRecord
 from utils.calculate_function import calculate_travel_time
 from utils.load import load_payloads, load_simulation_settings
 
@@ -142,8 +143,8 @@ def simulate(
         for i in range(len(route_detectors)):
             current_detector = route_detectors[i]
 
-            # 生成するペイロードイベントを一時的に保持するリスト
-            events_to_add = []
+            # 生成するペイロードレコードを一時的に保持するリスト
+            records_to_add = []
 
             # 連続ペイロードの生成
             if num_consecutive_payloads > 0:
@@ -157,7 +158,7 @@ def simulate(
                 )  # 最初の連続ペイロードのシーケンス番号
 
                 for k in range(num_consecutive_payloads):
-                    event_time = (
+                    record_time = (
                         current_time
                         + timedelta(seconds=consecutive_start_offset)
                         + timedelta(milliseconds=k)
@@ -167,9 +168,9 @@ def simulate(
                         assigned_payload_id_for_walker,
                         payload_distributions,
                     )
-                    events_to_add.append(
-                        DetectionEvent(
-                            timestamp=event_time,
+                    records_to_add.append(
+                        DetectionRecord(
+                            timestamp=record_time,
                             walker_id=walker.id,
                             hashed_payload=chosen_payload,
                             detector_id=current_detector.id,
@@ -186,16 +187,16 @@ def simulate(
             num_random_payloads = payloads_per_detector - num_consecutive_payloads
             for _ in range(num_random_payloads):
                 offset_seconds = random.randint(0, 300)
-                event_time = current_time + timedelta(seconds=offset_seconds)
+                record_time = current_time + timedelta(seconds=offset_seconds)
                 chosen_payload = choose_payload_for_model(
                     assigned_model_name,
                     assigned_payload_id_for_walker,
                     payload_distributions,
                 )
                 random_sequence_number = random.randint(0, 4095)
-                events_to_add.append(
-                    DetectionEvent(
-                        timestamp=event_time,
+                records_to_add.append(
+                    DetectionRecord(
+                        timestamp=record_time,
                         walker_id=walker.id,
                         hashed_payload=chosen_payload,
                         detector_id=current_detector.id,
@@ -205,9 +206,9 @@ def simulate(
                     )
                 )
 
-            # 生成されたすべてのイベントをタイムスタンプでソートして追加
-            events_to_add.sort(key=lambda x: x.timestamp)
-            detector_logs[current_detector.id].extend(events_to_add)
+            # 生成されたすべてのレコードをタイムスタンプでソートして追加
+            records_to_add.sort(key=lambda x: x.timestamp)
+            detector_logs[current_detector.id].extend(records_to_add)
 
             # 次の検出器への移動
             if i < len(route_detectors) - 1:
@@ -228,7 +229,7 @@ def simulate(
     for det_id, logs in detector_logs.items():
         logs.sort(
             key=lambda x: x.timestamp
-        )  # DetectionEventオブジェクトのtimestampでソート
+        )  # DetectionRecordオブジェクトのtimestampでソート
         file_path = os.path.join(results_dir, f"{det_id}_log.csv")
         with open(file_path, "w", newline="") as f:
             fieldnames = [
@@ -243,7 +244,7 @@ def simulate(
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for entry in logs:
-                # DetectionEventオブジェクトの属性からデータを書き出す
+                # DetectionRecordオブジェクトの属性からデータを書き出す
                 writer.writerow(
                     {
                         "Timestamp": entry.timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[
@@ -264,11 +265,16 @@ def simulate(
 # --- メイン実行部分 ---
 def main():
     # 設定データの読み込み
-    detectors = load_detectors("config/detectors.jsonc")
+    current_dir = os.path.dirname(__file__)
+    config_dir = os.path.join(current_dir, "../../config")
+
+    detectors = load_detectors(os.path.join(config_dir, "detectors.jsonc"))
     payload_distributions, model_names, model_probabilities = load_payloads(
-        "config/payloads.jsonc"
+        os.path.join(config_dir, "payloads.jsonc")
     )
-    simulation_settings = load_simulation_settings("config/simulation_settings.jsonc")
+    simulation_settings = load_simulation_settings(
+        os.path.join(config_dir, "simulation_settings.jsonc")
+    )
 
     # 設定値を変数に格納
     num_walkers_to_simulate = simulation_settings["num_walkers_to_simulate"]

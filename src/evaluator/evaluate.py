@@ -1,19 +1,22 @@
 import numpy as np
+import os  # osモジュールを追加
 from collections import defaultdict
 from domain.detector import Detector, load_detectors
-from utils.load import load_ground_truth_routes, load_logs, load_simulation_settings
-from domain.analysis_results import (
-    RouteAnalysisResult,
+from utils.load import (
+    load_ground_truth_routes,
+    load_logs,
+    load_simulation_settings,
 )
-from utils.collect_sort_all_events import (
-    collect_and_sort_events,
+from domain.analysis_results import RouteAnalysisResult
+from utils.collect_sort_all_records import collect_and_sort_records
+from utils.export_payload_records import export_payload_records
+from classify_logic.by_impossible_move import (
+    classify_records_by_impossible_move,
 )
-from utils.export_payload_events import export_payload_events
-from classify_logic.by_impossible_move import classify_events_by_impossible_move
 from classify_logic.by_impossible_move_and_window import (
-    classify_events_by_impossible_move_and_window,
+    classify_records_by_impossible_move_and_window,
 )
-from classify_logic.window_max import classify_events_window_max
+from classify_logic.window_max import classify_records_window_max
 
 logic_name = "by_impossible_move"
 # logic_name = "by_impossible_move_and_window"
@@ -24,35 +27,39 @@ def analyze_movements_with_clustering(
     logs: list[dict], detectors: dict[str, Detector]
 ) -> RouteAnalysisResult:  # 戻り値の型を変更
     """
-    ログデータからHashed_Payloadごとのイベントを分析し、
+    ログデータからHashed_Payloadごとのレコードを分析し、
     ありえない移動があった場合に新しいクラスタIDを割り当てる。
     """
     # シミュレーション設定を一度だけロード
-    simulation_settings = load_simulation_settings("config/simulation_settings.jsonc")
+    current_dir = os.path.dirname(__file__)
+    config_dir = os.path.join(current_dir, "../../config")
+    simulation_settings = load_simulation_settings(
+        os.path.join(config_dir, "simulation_settings.jsonc")
+    )
     walker_speed = simulation_settings["walker_speed"]
 
-    # 1. イベントの収集とソート (PayloadEventsCollection オブジェクトを返す)
-    events_per_record_per_payload = collect_and_sort_events(logs, detectors)
-    # 収集・ソート済みイベントをペイロードごとにCSV書き出し
-    export_payload_events(
-        events_per_record_per_payload,
-        output_dir="result/payload_events",
+    # 1. レコードの収集とソート (PayloadRecordsCollection オブジェクトを返す)
+    records_per_record_per_payload = collect_and_sort_records(logs, detectors)
+    # 収集・ソート済みレコードをペイロードごとにCSV書き出し
+    export_payload_records(
+        records_per_record_per_payload,
+        output_dir=os.path.join(current_dir, "../../result/payload_records"),
         include_index=False,
         gzip_compress=False,
     )
 
-    # 2. 移動経路のクラスタリング (PayloadEventsCollection オブジェクトを渡す)
+    # 2. 移動経路のクラスタリング (PayloadRecordsCollection オブジェクトを渡す)
     if logic_name == "by_impossible_move":
-        estimated_routes_per_payload = classify_events_by_impossible_move(
-            events_per_record_per_payload, detectors, walker_speed
+        estimated_routes_per_record = classify_records_by_impossible_move(
+            records_per_record_per_payload, detectors, walker_speed
         )
     elif logic_name == "by_impossible_move_and_window":
-        estimated_routes_per_payload = classify_events_by_impossible_move_and_window(
-            events_per_record_per_payload, detectors, walker_speed
+        estimated_routes_per_record = classify_records_by_impossible_move_and_window(
+            records_per_record_per_payload, detectors, walker_speed
         )
     elif logic_name == "window_max":
-        estimated_routes_per_payload = classify_events_window_max(
-            events_per_record_per_payload, detectors, walker_speed
+        estimated_routes_per_record = classify_records_window_max(
+            records_per_record_per_payload, detectors, walker_speed
         )
     else:
         raise ValueError(f"Unknown classification logic: {logic_name}")
@@ -60,7 +67,7 @@ def analyze_movements_with_clustering(
     # 結果を RouteAnalysisResult オブジェクトに格納して返す
     # ClusteredRoutes オブジェクトから辞書を取り出して渡す
     return RouteAnalysisResult(
-        estimated_clustered_routes=estimated_routes_per_payload.routes_by_cluster_id
+        estimated_clustered_routes=estimated_routes_per_record.routes_by_cluster_id
     )
 
 
@@ -165,10 +172,16 @@ def evaluate_algorithm(
 
 def main():
     # データの読み込み
-    detectors = load_detectors("config/detectors.jsonc")
-    logs = load_logs("result")
+    current_dir = os.path.dirname(__file__)
+    config_dir = os.path.join(current_dir, "../../config")
+    result_dir = os.path.join(current_dir, "../../result")
+
+    detectors = load_detectors(os.path.join(config_dir, "detectors.jsonc"))
+    logs = load_logs(result_dir)
     # logs = load_logs("test_data")  # テストデータで試す場合
-    ground_truth_routes = load_ground_truth_routes("result/walker_routes.csv")
+    ground_truth_routes = load_ground_truth_routes(
+        os.path.join(result_dir, "walker_routes.csv")
+    )
     # ground_truth_routes = load_ground_truth_routes("test_data/walker_routes.csv")
 
     # 移動経路の推定とありえない移動の排除、およびクラスタリング

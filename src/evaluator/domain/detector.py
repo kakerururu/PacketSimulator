@@ -1,4 +1,5 @@
 import json
+from utils.load import load_jsonc
 
 
 class Detector:
@@ -10,9 +11,8 @@ class Detector:
 
 def load_detectors(file_path: str) -> dict[str, Detector]:
     """jsoncファイルから検知器情報をロードし、IDをキー、バリューをDetectorオブジェクトとする辞書で返す"""
-    with open(file_path, "r") as file:
-        data = json.load(file)
-        detectors: list[Detector] = []
-        for detector in data["detectors"]:
-            detectors.append(Detector(detector["id"], detector["x"], detector["y"]))
-        return {detector.id: detector for detector in detectors}
+    data = load_jsonc(file_path)
+    detectors: list[Detector] = []
+    for detector in data["detectors"]:
+        detectors.append(Detector(detector["id"], detector["x"], detector["y"]))
+    return {detector.id: detector for detector in detectors}

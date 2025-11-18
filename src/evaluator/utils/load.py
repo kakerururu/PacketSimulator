@@ -3,6 +3,21 @@ import os
 import csv
 import math
 from datetime import datetime
+import re
+
+
+def load_jsonc(file_path: str) -> dict:
+    """
+    JSONCファイルを読み込み、コメントを削除してJSONとしてパースする。
+    """
+    with open(file_path, "r") as f:
+        content = f.read()
+    # コメントを削除 (行コメント // とブロックコメント /* */)
+    # 行コメント
+    content = re.sub(r"//.*", "", content)
+    # ブロックコメント (複数行対応)
+    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
+    return json.loads(content)
 
 
 def load_logs(log_dir: str) -> list[dict]:
@@ -57,9 +72,8 @@ def load_ground_truth_routes(file_path: str) -> dict[str, str]:
 # --- 設定ファイルの読み込み関数を追加 ---
 def load_simulation_settings(file_path: str) -> dict:
     """jsoncファイルからシミュレーション設定をロードする"""
-    with open(file_path, "r") as file:
-        data = json.load(file)
-        return data["simulation_settings"]
+    data = load_jsonc(file_path)
+    return data["simulation_settings"]
 
 
 def load_payloads(file_path: str) -> tuple[dict, list, list]:
@@ -68,8 +82,7 @@ def load_payloads(file_path: str) -> tuple[dict, list, list]:
     動的生成ペイロードを持つモデルも認識する。
     戻り値: (ペイロード分布辞書, モデル名リスト, モデル確率リスト)
     """
-    with open(file_path, "r") as f:
-        data = json.load(f)
+    data = load_jsonc(file_path)
 
     payload_distributions = {}  # 静的に定義されたペイロード分布を保持
     model_names = []

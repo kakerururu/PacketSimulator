@@ -4,7 +4,7 @@ import gzip
 import glob
 from typing import Optional
 from datetime import datetime
-from domain.analysis_results import PayloadEventsCollection
+from domain.analysis_results import PayloadRecordsCollection
 
 
 def _format_timestamp(ts: datetime) -> str:
@@ -15,15 +15,15 @@ def _format_timestamp(ts: datetime) -> str:
     return ts.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 
-def export_payload_events(
-    payload_events_collection: PayloadEventsCollection,
-    output_dir: str = "result/payload_events",
+def export_payload_records(
+    payload_records_collection: PayloadRecordsCollection,
+    output_dir: str = "result/payload_records",
     include_index: bool = True,
     gzip_compress: bool = False,
     clean_before: bool = True,
 ) -> dict:
     """
-    ペイロードごとにソート済みイベントを個別CSVへ書き出す。
+    ペイロードごとにソート済みレコードを個別CSVへ書き出す。
 
     出力:
       output_dir/payload_<payload_id_sanitized>.csv (または .csv.gz)
@@ -49,8 +49,8 @@ def export_payload_events(
     written_files: list[str] = []
     index_rows: list[tuple[str, int, str, str]] = []
 
-    for payload_id, events in payload_events_collection.events_by_payload.items():
-        if not events:
+    for payload_id, records in payload_records_collection.records_by_payload.items():
+        if not records:
             continue
 
         # ペイロードIDのファイル名安全化（英数字以外は '_'）
@@ -79,23 +79,23 @@ def export_payload_events(
                     "Sequence_Number",
                 ]
             )
-            for ev in events:  # ev: CollectedEvent
+            for rec in records:  # rec: CollectedRecord
                 writer.writerow(
                     [
                         payload_id,
-                        _format_timestamp(ev.timestamp),
-                        ev.detector_id,
-                        f"{ev.detector_x:.6f}",
-                        f"{ev.detector_y:.6f}",
-                        ev.sequence_number,
+                        _format_timestamp(rec.timestamp),
+                        rec.detector_id,
+                        f"{rec.detector_x:.6f}",
+                        f"{rec.detector_y:.6f}",
+                        rec.sequence_number,
                     ]
                 )
 
         written_files.append(file_path)
 
-        first_ts = _format_timestamp(events[0].timestamp)
-        last_ts = _format_timestamp(events[-1].timestamp)
-        index_rows.append((payload_id, len(events), first_ts, last_ts))
+        first_ts = _format_timestamp(records[0].timestamp)
+        last_ts = _format_timestamp(records[-1].timestamp)
+        index_rows.append((payload_id, len(records), first_ts, last_ts))
 
     index_file: Optional[str] = None
     if include_index:
@@ -103,7 +103,7 @@ def export_payload_events(
         with open(index_file, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(
-                ["Payload_ID", "NumEvents", "FirstTimestamp", "LastTimestamp"]
+                ["Payload_ID", "NumRecords", "FirstTimestamp", "LastTimestamp"]
             )
             writer.writerows(index_rows)
 
@@ -114,4 +114,4 @@ def export_payload_events(
     }
 
 
-__all__ = ["export_payload_events"]
+__all__ = ["export_payload_records"]

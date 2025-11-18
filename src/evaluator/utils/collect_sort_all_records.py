@@ -2,19 +2,19 @@ from collections import defaultdict
 from typing import Dict, List, Any
 from domain.detector import Detector
 from domain.analysis_results import (
-    Event,
-    PayloadEventsCollection,
+    Record,
+    PayloadRecordsCollection,
 )
 
 
-def collect_and_sort_events(
+def collect_and_sort_records(
     logs: List[Dict[str, Any]], detectors: Dict[str, Detector]
-) -> PayloadEventsCollection:
-    """ログデータからHashed_Payloadごとのイベントを収集し、時間順にソートする
-    具体例：{"payload_1": [event1, event2], "payload_2": [event3], ...}
+) -> PayloadRecordsCollection:
+    """ログデータからHashed_Payloadごとのレコードを収集し、時間順にソートする
+    具体例：{"payload_1": [record1, record2], "payload_2": [record3], ...}
 
     """
-    payload_events_raw = defaultdict(list)
+    payload_records_raw = defaultdict(list)
     for log_entry in logs:
         current_detector_id = None
         for det_id, det_obj in detectors.items():
@@ -25,8 +25,8 @@ def collect_and_sort_events(
                 current_detector_id = det_id
                 break
         if current_detector_id:
-            payload_events_raw[log_entry["Hashed_Payload"]].append(
-                Event(
+            payload_records_raw[log_entry["Hashed_Payload"]].append(
+                Record(
                     timestamp=log_entry["Timestamp"],
                     detector_id=current_detector_id,
                     detector_x=log_entry["Detector_X"],
@@ -35,9 +35,9 @@ def collect_and_sort_events(
                 )
             )
 
-    events_by_payload: Dict[str, List[Event]] = {}
-    for payload_id, events in payload_events_raw.items():
-        events.sort(key=lambda x: x.timestamp)
-        events_by_payload[payload_id] = events
+    records_by_payload: Dict[str, List[Record]] = {}
+    for payload_id, records in payload_records_raw.items():
+        records.sort(key=lambda x: x.timestamp)
+        records_by_payload[payload_id] = records
 
-    return PayloadEventsCollection(events_by_payload=events_by_payload)
+    return PayloadRecordsCollection(records_by_payload=records_by_payload)
