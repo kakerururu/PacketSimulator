@@ -12,7 +12,7 @@ def classify_records_by_impossible_move(
     payload_records_collection: PayloadRecordsCollection,
     detectors: Dict[str, Detector],
     walker_speed: float,
-) -> ClusteredRoutes:
+) -> tuple[ClusteredRoutes, PayloadRecordsCollection]:  # 戻り値の型を変更
     """
     Hashed_Payloadごとのレコードを分析し、ありえない移動があった場合に新しいクラスタIDを割り当てる。
     戻り値: キーがクラスタID、値が推定ルート文字列の辞書
@@ -35,13 +35,16 @@ def classify_records_by_impossible_move(
         # クラスタIDの生成、例: "payload1_cluster1"
         current_cluster_id = f"{payload_id}_cluster{cluster_counter[payload_id]}"
         # 最初のレコードの検出器名をsequenceに追加
+        records[0].is_judged = True  # is_judgedをTrueに設定
         current_route_sequence_list.append(records[0].detector_id)
 
         prev_record = records[0]
+        prev_record.is_judged = True  # 最初のprev_recordも判定に使用されるためTrueに
 
         # 一個前のレコードと現在のレコードの比較を最終レコードまでループ
         for i in range(1, len(records)):
             current_record = records[i]
+            current_record.is_judged = True  # 判定に使用されるレコードをTrueに
 
             prev_record_detector_id = prev_record.detector_id
             current_record_detector_id = current_record.detector_id
@@ -104,6 +107,7 @@ def classify_records_by_impossible_move(
                 current_route_sequence_list
             )
 
-    return ClusteredRoutes(
-        routes_by_cluster_id=estimated_clustered_routes
-    )  # ClusteredRoutes オブジェクトを返す
+    return (
+        ClusteredRoutes(routes_by_cluster_id=estimated_clustered_routes),
+        payload_records_collection,
+    )  # ClusteredRoutes オブジェクトと更新された PayloadRecordsCollection を返す

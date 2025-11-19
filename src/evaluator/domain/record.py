@@ -15,3 +15,4 @@ class DetectionRecord:
     detector_x: float
     detector_y: float
     sequence_number: int
+    is_judged: bool = False

@@ -18,8 +18,8 @@ from classify_logic.by_impossible_move_and_window import (
 )
 from classify_logic.window_max import classify_records_window_max
 
-logic_name = "by_impossible_move"
-# logic_name = "by_impossible_move_and_window"
+# logic_name = "by_impossible_move"
+logic_name = "by_impossible_move_and_window"
 # logic_name = "window_max"
 
 
@@ -50,20 +50,33 @@ def analyze_movements_with_clustering(
 
     # 2. 移動経路のクラスタリング (PayloadRecordsCollection オブジェクトを渡す)
     if logic_name == "by_impossible_move":
-        estimated_routes_per_record = classify_records_by_impossible_move(
-            records_per_record_per_payload, detectors, walker_speed
+        estimated_routes_per_record, updated_payload_records_collection = (
+            classify_records_by_impossible_move(
+                records_per_record_per_payload, detectors, walker_speed
+            )
         )
     elif logic_name == "by_impossible_move_and_window":
-        estimated_routes_per_record = classify_records_by_impossible_move_and_window(
-            records_per_record_per_payload, detectors, walker_speed
+        estimated_routes_per_record, updated_payload_records_collection = (
+            classify_records_by_impossible_move_and_window(
+                records_per_record_per_payload, detectors, walker_speed
+            )
         )
     elif logic_name == "window_max":
-        estimated_routes_per_record = classify_records_window_max(
-            records_per_record_per_payload, detectors, walker_speed
+        estimated_routes_per_record, updated_payload_records_collection = (
+            classify_records_window_max(
+                records_per_record_per_payload, detectors, walker_speed
+            )
         )
     else:
         raise ValueError(f"Unknown classification logic: {logic_name}")
 
+    # is_judged が True のレコードのみを judged_payload_records ディレクトリに書き出す
+    export_payload_records(
+        updated_payload_records_collection,
+        output_dir=os.path.join(current_dir, "../../result/judged_payload_records"),
+        include_index=False,
+        gzip_compress=False,
+    )
     # 結果を RouteAnalysisResult オブジェクトに格納して返す
     # ClusteredRoutes オブジェクトから辞書を取り出して渡す
     return RouteAnalysisResult(

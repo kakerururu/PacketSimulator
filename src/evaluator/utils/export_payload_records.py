@@ -77,6 +77,7 @@ def export_payload_records(
                     "Detector_X",
                     "Detector_Y",
                     "Sequence_Number",
+                    "Is_Judged",
                 ]
             )
             for rec in records:  # rec: CollectedRecord
@@ -88,6 +89,7 @@ def export_payload_records(
                         f"{rec.detector_x:.6f}",
                         f"{rec.detector_y:.6f}",
                         rec.sequence_number,
+                        rec.is_judged,
                     ]
                 )
 

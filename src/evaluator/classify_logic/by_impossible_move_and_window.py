@@ -14,7 +14,7 @@ def classify_records_by_impossible_move_and_window(
     walker_speed: float,
     max_lookahead: int = 3,
     impossible_factor: float = 0.8,
-) -> ClusteredRoutes:
+) -> tuple[ClusteredRoutes, PayloadRecordsCollection]:  # 戻り値の型を変更
     """
     ありえない移動 (prev -> current が最小移動時間 * impossible_factor 未満) を検知した際、
     直後最大 max_lookahead 個のレコードの中に「prev から物理的に到達可能」なレコードがあるかを探索し、
@@ -48,13 +48,16 @@ def classify_records_by_impossible_move_and_window(
         # 新しいクラスタ開始
         cluster_counter[payload_id] += 1
         current_cluster_id = f"{payload_id}_cluster{cluster_counter[payload_id]}"
+        records[0].is_judged = True  # 最初のレコードを判定済みとする
         route_sequence: List[str] = [records[0].detector_id]
 
         prev_record = records[0]
+        prev_record.is_judged = True  # prev_recordも判定済みとする
         i = 1  # while でインデックス制御（lookaheadジャンプに対応）
 
         while i < len(records):
             current_record = records[i]
+            current_record.is_judged = True  # current_recordも判定済みとする
 
             prev_det_id = prev_record.detector_id
             curr_det_id = current_record.detector_id
@@ -95,6 +98,9 @@ def classify_records_by_impossible_move_and_window(
                 if look_found_index is not None:
                     # ブリッジ成功: 不可能だった current を無視し、到達可能な candidate を採用
                     candidate_record = records[look_found_index]
+                    candidate_record.is_judged = (
+                        True  # 採用されたレコードも判定済みとする
+                    )
                     # 重複検出器防止
                     # ここで、重複する検出器IDを持つレコードをスキップ
                     if candidate_record.detector_id != route_sequence[-1]:
@@ -127,4 +133,7 @@ def classify_records_by_impossible_move_and_window(
         if len(route_sequence) > 1:
             estimated_clustered_routes[current_cluster_id] = "".join(route_sequence)
 
-    return ClusteredRoutes(routes_by_cluster_id=estimated_clustered_routes)
+    return (
+        ClusteredRoutes(routes_by_cluster_id=estimated_clustered_routes),
+        payload_records_collection,
+    )  # ClusteredRoutes オブジェクトと更新された PayloadRecordsCollection を返す
