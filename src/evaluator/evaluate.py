@@ -12,8 +12,8 @@ from domain.analysis_results import RouteAnalysisResult
 from utils.collect_sort_all_records import collect_and_sort_records
 from utils.export_payload_records import export_payload_records
 
-logic_name = "by_impossible_move"
-# logic_name = "by_impossible_move_and_window"
+# logic_name = "by_impossible_move"
+logic_name = "by_impossible_move_and_window"
 # logic_name = "window_max"
 
 # データの読み込み
