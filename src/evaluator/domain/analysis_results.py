@@ -15,9 +15,9 @@ class RouteAnalysisResult:
 
 
 @dataclass
-class Event:
+class Record:
     """
-    _collect_and_sort_events 関数によって収集される個々の検出イベントデータ。
+    _collect_and_sort_records 関数によって収集される個々の検出レコードデータ。
     """
 
     timestamp: datetime
@@ -28,13 +28,13 @@ class Event:
 
 
 @dataclass
-class PayloadEventsCollection:
+class PayloadRecordsCollection:
     """
-    Hashed_Payload ごとに収集され、時間順にソートされたイベントのコレクション。
-    具体例：{"payload_1": [event1, event2], "payload_2": [event3], ...}
+    Hashed_Payload ごとに収集され、時間順にソートされたレコードのコレクション。
+    具体例：{"payload_1": [record1, record2], "payload_2": [record3], ...}
     """
 
-    events_by_payload: Dict[str, List[Event]]
+    records_by_payload: Dict[str, List[Record]]
 
 
 @dataclass
