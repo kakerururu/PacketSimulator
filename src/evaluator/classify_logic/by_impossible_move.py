@@ -70,6 +70,7 @@ def classify_records_by_impossible_move(
 
             # 最小移動時間の80%未満で到達している場合はありえない移動と判断し、新しいクラスタを開始
             if time_diff < min_travel_time * 0.8:
+                current_record.is_judged = False  # 不可能移動レコードは判定に使用しない
                 # 現在のクラスタIDのルートをペイロード名+クラスタ番号をキーにして保存
                 if len(current_route_sequence_list) > 1:
                     estimated_clustered_routes[current_cluster_id] = "".join(

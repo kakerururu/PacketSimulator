@@ -79,6 +79,7 @@ def classify_records_by_impossible_move_and_window(
 
             # 不可能移動判定
             if time_diff < min_travel_time * impossible_factor:
+                current_record.is_judged = False  # 不可能移動レコードは判定に使用しない
                 # lookahead 探索
                 look_found_index: Optional[int] = None
                 for j in range(i + 1, min(i + 1 + max_lookahead, len(records))):

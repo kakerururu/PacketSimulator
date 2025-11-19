@@ -79,6 +79,7 @@ def classify_records_window_max(
             # 不可能移動判定
             if time_diff < min_travel_time * impossible_factor:
                 scan_start_index = idx  # 最初の不可能レコード位置
+                current_record.is_judged = False  # 不可能移動レコードは判定に使用しない
                 found_index: Optional[int] = None
 
                 scan_idx = scan_start_index

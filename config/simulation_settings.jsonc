@@ -1,6 +1,6 @@
 {
     "simulation_settings": {
-        "num_walkers_to_simulate": 10, //シミュレーションする歩行者の数
+        "num_walkers_to_simulate": 50, //シミュレーションする歩行者の数
         "payloads_per_detector_per_walker": 10, //歩行者が検知器で送信するペイロード数
         "num_consecutive_payloads": 3, //シーケンス番号が連続するペイロード数
         "walker_speed": 1.4, // 歩行者の平均速度 (m/s)
