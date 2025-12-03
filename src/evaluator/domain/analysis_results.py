@@ -22,6 +22,7 @@ class Record:
 
     timestamp: datetime
     detector_id: str
+    walker_id: str
     detector_x: float
     detector_y: float
     sequence_number: int

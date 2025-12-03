@@ -29,6 +29,7 @@ def collect_and_sort_records(
                 Record(
                     timestamp=log_entry["Timestamp"],
                     detector_id=current_detector_id,
+                    walker_id=log_entry["Walker_ID"],  # Walker_ID を追加
                     detector_x=log_entry["Detector_X"],
                     detector_y=log_entry["Detector_Y"],
                     sequence_number=log_entry["Sequence_Number"],  # 追加

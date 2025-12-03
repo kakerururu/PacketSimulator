@@ -9,8 +9,8 @@ class DetectionRecord:
     """
 
     timestamp: datetime
-    walker_id: str
     hashed_payload: str
+    walker_id: str
     detector_id: str
     detector_x: float
     detector_y: float

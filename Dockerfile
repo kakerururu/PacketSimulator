@@ -1,4 +1,4 @@
-FROM python:3.11.0-slim
+FROM nikolaik/python-nodejs
 
 RUN apt update && apt install -y git
 

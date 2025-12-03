@@ -12,7 +12,7 @@ def classify_records_by_impossible_move_and_window(
     payload_records_collection: PayloadRecordsCollection,
     detectors: Dict[str, Detector],
     walker_speed: float,
-    max_lookahead: int = 3,
+    max_lookahead: int = 5,
     impossible_factor: float = 0.8,
 ) -> tuple[ClusteredRoutes, PayloadRecordsCollection]:  # 戻り値の型を変更
     """
