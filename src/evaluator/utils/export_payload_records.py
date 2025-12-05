@@ -73,10 +73,12 @@ def export_payload_records(
                 [
                     "Payload_ID",
                     "Timestamp",
+                    "Walker_ID",  # Walker_ID を追加
                     "Detector_ID",
                     "Detector_X",
                     "Detector_Y",
                     "Sequence_Number",
+                    "Is_Judged",
                 ]
             )
             for rec in records:  # rec: CollectedRecord
@@ -84,10 +86,12 @@ def export_payload_records(
                     [
                         payload_id,
                         _format_timestamp(rec.timestamp),
+                        rec.walker_id,  # Walker_ID を追加
                         rec.detector_id,
                         f"{rec.detector_x:.6f}",
                         f"{rec.detector_y:.6f}",
                         rec.sequence_number,
+                        rec.is_judged,
                     ]
                 )
 

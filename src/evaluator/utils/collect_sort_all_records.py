@@ -29,15 +29,32 @@ def collect_and_sort_records(
                 Record(
                     timestamp=log_entry["Timestamp"],
                     detector_id=current_detector_id,
+                    walker_id=log_entry["Walker_ID"],  # Walker_ID を追加
                     detector_x=log_entry["Detector_X"],
                     detector_y=log_entry["Detector_Y"],
                     sequence_number=log_entry["Sequence_Number"],  # 追加
                 )
             )
 
-    records_by_payload: Dict[str, List[Record]] = {}
+    records_by_payload: Dict[str, List[Record]] = defaultdict(list)
+
+    # ハードコードされたペイロード統合ルールを適用
+    # 今回はペイロード自体を文字列で代替している
+    # 本来は編集距離による類似度が95%以上のものを統合するロジックを実装すべき
+    integrated_payload_mapping = {}
+    for i in range(1, 11):  # C_01 から C_10 まで
+        base_payload = f"C_{i:02d}_base_payload"
+        sub_payload = f"C_{i:02d}_sub_payload"
+        integrated_payload = f"C_{i:02d}_integrated_payload"
+        integrated_payload_mapping[base_payload] = integrated_payload
+        integrated_payload_mapping[sub_payload] = integrated_payload
+
     for payload_id, records in payload_records_raw.items():
+        target_payload_id = integrated_payload_mapping.get(payload_id, payload_id)
+        records_by_payload[target_payload_id].extend(records)
+
+    # 統合されたペイロードのレコードを時間順にソートし直す
+    for payload_id, records in records_by_payload.items():
         records.sort(key=lambda x: x.timestamp)
-        records_by_payload[payload_id] = records
 
     return PayloadRecordsCollection(records_by_payload=records_by_payload)

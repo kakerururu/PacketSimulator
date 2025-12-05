@@ -25,7 +25,9 @@
 				"njpwerner.autodocstring",
 				"charliermarsh.ruff",
 				"mechatroner.rainbow-csv",
-				"saoudrizwan.claude-dev"
+				"saoudrizwan.claude-dev",
+				"RooVeterinaryInc.roo-cline",
+				"Anthropic.claude-code"
 			]
 		}
 	}

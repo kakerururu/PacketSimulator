@@ -13,7 +13,7 @@ def classify_records_window_max(
     detectors: Dict[str, Detector],
     walker_speed: float,
     impossible_factor: float = 0.8,
-) -> ClusteredRoutes:
+) -> tuple[ClusteredRoutes, PayloadRecordsCollection]:
     """
     不可能移動 (prev -> candidate の経過時間 actual_time が
     min_travel_time * impossible_factor 未満) を検知した際、
@@ -43,14 +43,21 @@ def classify_records_window_max(
             continue
 
         cluster_counter[payload_id] += 1
+        # 各ペイロードの処理開始時に、すべてのレコードの is_judged を False に初期化
+        for rec in records:
+            rec.is_judged = False
+
         current_cluster_id = f"{payload_id}_cluster{cluster_counter[payload_id]}"
+        records[0].is_judged = True  # 最初のレコードは判定に使用される
         route_sequence: List[str] = [records[0].detector_id]
 
         prev_record = records[0]
+        prev_record.is_judged = True  # 最初のprev_recordも判定に使用されるためTrueに
         idx = 1  # while で前方探索/ジャンプ対応
 
         while idx < len(records):
             current_record = records[idx]
+            current_record.is_judged = True  # 判定に使用されるレコードをTrueに
             prev_det_id = prev_record.detector_id
             curr_det_id = current_record.detector_id
 
@@ -72,6 +79,7 @@ def classify_records_window_max(
             # 不可能移動判定
             if time_diff < min_travel_time * impossible_factor:
                 scan_start_index = idx  # 最初の不可能レコード位置
+                current_record.is_judged = False  # 不可能移動レコードは判定に使用しない
                 found_index: Optional[int] = None
 
                 scan_idx = scan_start_index
@@ -99,6 +107,7 @@ def classify_records_window_max(
                 if found_index is not None:
                     # 採用候補発見: 不可能レコード列をノイズとして捨て、候補を追加
                     chosen = records[found_index]
+                    chosen.is_judged = True  # 採用されたレコードは判定に使用される
                     if chosen.detector_id != route_sequence[-1]:
                         route_sequence.append(chosen.detector_id)
                     prev_record = chosen
@@ -116,6 +125,9 @@ def classify_records_window_max(
                         f"{payload_id}_cluster{cluster_counter[payload_id]}"
                     )
                     impossible_record = records[scan_start_index]
+                    impossible_record.is_judged = (
+                        True  # 新しいクラスタの開始点となるレコードは判定に使用される
+                    )
                     route_sequence = [impossible_record.detector_id]
                     prev_record = impossible_record
                     idx = scan_start_index + 1
@@ -130,7 +142,10 @@ def classify_records_window_max(
         if len(route_sequence) > 1:
             estimated_clustered_routes[current_cluster_id] = "".join(route_sequence)
 
-    return ClusteredRoutes(routes_by_cluster_id=estimated_clustered_routes)
+    return (
+        ClusteredRoutes(routes_by_cluster_id=estimated_clustered_routes),
+        payload_records_collection,
+    )
 
 
 __all__ = ["classify_records_window_max"]
