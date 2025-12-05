@@ -26,7 +26,8 @@
 				"charliermarsh.ruff",
 				"mechatroner.rainbow-csv",
 				"saoudrizwan.claude-dev",
-				"RooVeterinaryInc.roo-cline"
+				"RooVeterinaryInc.roo-cline",
+				"Anthropic.claude-code"
 			]
 		}
 	}
