@@ -5,10 +5,9 @@
 ```
 src2/generator/usecase/
 ├── walker_generation.py        # 通行人生成
-├── timeline_generation.py      # タイムライン生成
+├── stay_generation.py          # 滞在リスト生成
 ├── record_generation.py        # レコード生成
-├── simulation.py               # シミュレーション実行
-└── generate_simulation.py      # 旧実装（保持）
+└── simulation.py               # シミュレーション実行
 ```
 
 ## 責務ごとの分割
@@ -26,25 +25,26 @@ src2/generator/usecase/
 3. ユニーク型モデルには固定ペイロードIDを割り当て
 4. ランダムなルートを生成
 
-### 2. timeline_generation.py
-**責務**: 滞在タイムラインの生成
+### 2. stay_generation.py
+**責務**: 滞在リストの生成
 
 **関数**:
-- `calculate_travel_time(from, to, speed, variation)` - 移動時間計算
-- `generate_timeline(route, ...)` - タイムライン生成
+- `calculate_moving_time_from_detector_to_detector(from, to, speed, variation)` - 移動時間計算
+- `generate_stays(route, detectors, start_time)` - 滞在リスト生成
 
 **処理内容**:
-1. ルート上の各検出器での滞在情報を生成
-2. 到着・出発時刻を計算
-3. 滞在時間をランダムに決定 (180-420秒)
-4. 次の検出器への移動時間を計算
+1. 設定ファイルから数値パラメータを自動読み込み
+2. ルート上の各検出器での滞在情報を生成
+3. 到着・出発時刻を計算
+4. 滞在時間をランダムに決定 (180-420秒)
+5. 次の検出器への移動時間を計算
 
 ### 3. record_generation.py
 **責務**: 検出レコードの生成
 
 **関数**:
-- `choose_payload(model, assigned_id, definitions)` - ペイロード選択
-- `generate_detection_records(walker, timeline, ...)` - レコード生成
+- `choose_payload(walker_id, model, definitions)` - ペイロード選択
+- `generate_detection_records(walker, stays, ...)` - レコード生成
 
 **処理内容**:
 1. 各滞在期間中にレコードを生成
@@ -60,9 +60,9 @@ src2/generator/usecase/
 
 **処理内容**:
 1. 通行人を生成
-2. 各通行人のタイムラインを生成
-3. 各通行人のレコードを生成
-4. 軌跡オブジェクトを作成
+2. 各通行人の滞在リストを生成
+3. 軌跡オブジェクトを作成（滞在リスト含む）
+4. 各通行人のレコードを生成
 5. すべての結果を返す
 
 ## main.py での使用方法
@@ -83,13 +83,11 @@ trajectories, detection_records = simulation.run_simulation(
     model_probabilities=model_probabilities,
     num_walkers=settings["num_walkers_to_simulate"],
     start_time=datetime(2024, 1, 14, 11, 0, 0),
-    stay_duration_min=settings["stay_duration_min_seconds"],
-    stay_duration_max=settings["stay_duration_max_seconds"],
-    walker_speed=settings["walker_speed"],
-    variation_factor=settings["variation_factor"],
     payloads_per_detector=settings["payloads_per_detector_per_walker"],
     num_consecutive_payloads=settings["num_consecutive_payloads"],
 )
+# Note: stay_duration, walker_speed, variation_factor は
+# stay_generation.generate_stays() 内で自動読み込みされる
 ```
 
 ## データフロー
@@ -105,10 +103,11 @@ simulation.run_simulation()
   │
   └─→ 各通行人に対して:
         │
-        ├─→ timeline_generation.generate_timeline()
-        │     └─→ timeline_generation.calculate_travel_time()
+        ├─→ stay_generation.generate_stays()
+        │     ├─→ load_simulation_settings() (自動読み込み)
+        │     └─→ stay_generation.calculate_moving_time_from_detector_to_detector()
         │
-        ├─→ Trajectory オブジェクト作成
+        ├─→ Trajectory オブジェクト作成 (stays を含む)
         │
         └─→ record_generation.generate_detection_records()
               └─→ record_generation.choose_payload()
