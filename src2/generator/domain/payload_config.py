@@ -8,23 +8,23 @@ class PayloadModel(TypedDict):
 
     すべてのモデルは以下のフィールドを持つ：
     - overall_probability: モデル自体の選択確率
-    - dynamic_unique_payload: 動的にユニークなペイロードを生成するかのフラグ
+    - is_unique: 通行人ごとにユニークなペイロードを持つか
     - payload_distribution: 各ペイロードの確率分布
       - ユニーク型の場合は空の辞書 {}
-      - その他のモデルの場合はペイロード名と確率の組み合わせを返す
+      - その他のモデルの場合はペイロード名と確率の組み合わせ
 
     Examples:
         # ユニーク型モデル
         >>> unique_model: PayloadModel = {
         ...     "overall_probability": 0.20,
-        ...     "dynamic_unique_payload": True,
+        ...     "is_unique": True,
         ...     "payload_distribution": {}
         ... }
 
         # 限定変動型モデル
         >>> variant_model: PayloadModel = {
         ...     "overall_probability": 0.035,
-        ...     "dynamic_unique_payload": False,
+        ...     "is_unique": False,
         ...     "payload_distribution": {
         ...         "C_01_base_payload": 0.9,
         ...         "C_01_sub_payload": 0.1
@@ -33,7 +33,7 @@ class PayloadModel(TypedDict):
     """
 
     overall_probability: float
-    dynamic_unique_payload: bool
+    is_unique: bool
     payload_distribution: Dict[str, float]
 
 
@@ -44,12 +44,12 @@ class PayloadDefinitions(TypedDict):
         >>> payload_defs: PayloadDefinitions = {
         ...     "Model_Group_A_DynamicUnique": {
         ...         "overall_probability": 0.20,
-        ...         "dynamic_unique_payload": True,
+        ...         "is_unique": True,
         ...         "payload_distribution": {}
         ...     },
         ...     "Model_C_08": {
         ...         "overall_probability": 0.035,
-        ...         "dynamic_unique_payload": False,
+        ...         "is_unique": False,
         ...         "payload_distribution": {
         ...             "C_08_base_payload": 0.9,
         ...             "C_08_sub_payload": 0.1
