@@ -29,7 +29,7 @@ def write_ground_truth(
         >>> from ..domain.stay import Stay
         >>> stay = Stay("A", datetime(2024, 1, 14, 11, 0, 0),
         ...              datetime(2024, 1, 14, 11, 5, 0), 300.0)
-        >>> traj = Trajectory("gt_traj_1", "Walker_1", "ABCD", [stay])
+        >>> traj = Trajectory("gt_traj_1", "Walker_1", "ABCD", stays=[stay])
         >>> write_ground_truth([traj])
     """
     # 設定ファイルから情報を読み込み
@@ -56,14 +56,14 @@ def write_ground_truth(
                 "trajectory_id": traj.trajectory_id,
                 "walker_id": traj.walker_id,  # 単一IDに変更済み
                 "route": traj.route,
-                "timeline": [
+                "stays": [
                     {
                         "detector_id": stay.detector_id,
                         "arrival_time": format_timestamp(stay.arrival_time),
                         "departure_time": format_timestamp(stay.departure_time),
                         "duration_seconds": stay.duration_seconds,
                     }
-                    for stay in traj.timeline
+                    for stay in traj.stays
                 ],
             }
         )

@@ -20,11 +20,11 @@ class Trajectory:
         ...     trajectory_id="gt_traj_1",
         ...     walker_id="Walker_1",
         ...     route="AB",
-        ...     timeline=[stay_a, stay_b]
+        ...     stays=[stay_a, stay_b]
         ... )
     """
 
     trajectory_id: str  # 軌跡ID（例: "gt_traj_1"）
     walker_id: str  # この軌跡を構成する通行人のID（例: "Walker_1"）
     route: str  # ルート（例: "ABCD"）
-    timeline: List[Stay]  # 滞在情報のリスト（時系列順）
+    stays: List[Stay]  # 滞在情報のリスト（時系列順）
