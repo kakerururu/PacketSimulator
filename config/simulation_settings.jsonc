@@ -4,6 +4,8 @@
         "payloads_per_detector_per_walker": 10, //歩行者が検知器で送信するペイロード数
         "num_consecutive_payloads": 3, //シーケンス番号が連続するペイロード数
         "walker_speed": 1.4, // 歩行者の平均速度 (m/s)
-        "variation_factor": 0.1 // 歩行者の速度の変動係数
+        "variation_factor": 0.1, // 歩行者の速度の変動係数
+        "stay_duration_min_seconds": 180, // 滞在時間の最小値（秒）
+        "stay_duration_max_seconds": 420 // 滞在時間の最大値（秒）
     }
 }
