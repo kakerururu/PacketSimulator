@@ -64,7 +64,7 @@ Generator モジュールは、スマートフォン検出による人流追跡�
 │  - config_loader.py                │
 │  - csv_writer.py                   │
 │  - json_writer.py                  │
-│  - shared.py (utilities)           │
+│  - utils.py (utilities)            │
 └────────────┬───────────────────────┘
              │
              ↓
@@ -104,7 +104,7 @@ src2/generator/
 │   ├── config_loader.py        # 設定ファイル読み込み
 │   ├── csv_writer.py           # CSV出力
 │   ├── json_writer.py          # JSON出力
-│   └── shared.py               # 共通ユーティリティ
+│   └── utils.py                # 共通ユーティリティ
 │
 ├── usecase/                     # ユースケース層
 │   ├── __init__.py
@@ -297,7 +297,7 @@ Timestamp,Walker_ID,Hashed_Payload,Detector_ID,Sequence_Number
 }
 ```
 
-### shared.py
+### utils.py
 
 **責務**: 共通ユーティリティ関数
 
@@ -840,7 +840,7 @@ head src2_result/detector_logs/A_log.csv
 
 **実装**:
 - `walker_generation`: 通行人生成のみ
-- `timeline_generation`: タイムライン生成のみ
+- `stay_generation`: 滞在生成のみ
 - `record_generation`: レコード生成のみ
 
 **メリット**:

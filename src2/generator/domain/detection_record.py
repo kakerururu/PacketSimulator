@@ -14,7 +14,7 @@ class DetectionRecord:
         >>> record = DetectionRecord(
         ...     timestamp=datetime(2024, 1, 14, 11, 0, 5, 123000),
         ...     walker_id="Walker_1",
-        ...     hashed_payload="C_01_base_payload",
+        ...     hashed_id="C_01_base_hash",
         ...     detector_id="A",
         ...     sequence_number=100
         ... )
@@ -22,6 +22,6 @@ class DetectionRecord:
 
     timestamp: datetime  # 検出時刻（ミリ秒精度）
     walker_id: str  # 通行人ID（Ground Truth用、実運用では存在しない）
-    hashed_id: str  # ペイロードのハッシュ値（例: "C_01_base_payload"）
+    hashed_id: str  # ペイロードのハッシュ値（例: "C_01_base_hash"）
     detector_id: str  # 検出器ID（例: "A"）
     sequence_number: int  # シーケンス番号（0-4095）

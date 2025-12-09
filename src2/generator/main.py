@@ -27,7 +27,6 @@ def main():
     print(f"検出器数: {len(detectors)}")
     print(f"シミュレートする通行人数: {settings['num_walkers_to_simulate']}人")
     print(f"各検出器での検出数: {settings['payloads_per_detector_per_walker']}個")
-    print(f"連続ペイロード数: {settings['num_consecutive_payloads']}個")
     print(f"通行人の移動速度: {settings['walker_speed']} m/s")
     print(
         f"滞在時間: {settings['stay_duration_min_seconds']}-{settings['stay_duration_max_seconds']}秒"
