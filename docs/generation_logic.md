@@ -67,7 +67,7 @@ Walker_1:
 Walker_2:
   - model: "Model_Group_A_DynamicUnique"
   - route: "BDCA"
-  - assigned_hash_ID: "DynamicUniquePayload_Walker_Walker_2" (固定)
+  - assigned_hash_ID: "unique_and_hashed_payload_Walker_2" (固定)
 ```
 
 ### Step 2: 滞在タイムライン生成

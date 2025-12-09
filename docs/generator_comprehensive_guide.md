@@ -429,7 +429,7 @@ travel_time = max(0, base_time + variation)
 - レコード生成時にペイロードを選択
 - **ユニーク型モデル** (`is_unique=True`):
   - `walker_id` に基づいて固定ペイロードを生成
-  - 例: `"DynamicUniquePayload_Walker_Walker_1"`
+  - 例: `"unique_and_hashed_payload_Walker_1"`
   - 全レコードで同じペイロードを使用
 - **その他のモデル** (`is_unique=False`):
   - 確率分布に基づいて毎回選択
@@ -439,7 +439,7 @@ travel_time = max(0, base_time + variation)
 ```python
 if payload_definitions[model_name]["is_unique"]:
     # ユニーク型: 固定ペイロード
-    return f"DynamicUniquePayload_Walker_{walker_id}"
+    return f"unique_and_hashed_payload_{walker_id}"
 else:
     # 確率分布型: 毎回選択
     distribution = payload_definitions[model_name]["payload_distribution"]
@@ -1312,7 +1312,7 @@ def generate_detection_records(walker, stays, payload_definitions,
 def choose_payload(walker_id, model_name, payload_definitions):
     # ユニーク型モデル
     if payload_definitions[model_name]["is_unique"]:
-        return f"DynamicUniquePayload_Walker_{walker_id}"
+        return f"unique_and_hashed_payload_{walker_id}"
 
     # その他のモデル
     distribution = payload_definitions[model_name]["payload_distribution"]
