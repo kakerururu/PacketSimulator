@@ -90,8 +90,11 @@ def generate_stays(
     stays = []
     current_time = start_time
 
+    # ルート文字列から順番通りの検出器リストを作成
     route_detectors = [detectors[detector_id] for detector_id in route]
 
+    # リストにおけるインデックスとリスト内の要素の値を取得しながらループ
+    # i=0,detector=検出器A
     for i, detector in enumerate(route_detectors):
         # 到着時刻
         arrival_time = current_time
@@ -111,10 +114,15 @@ def generate_stays(
 
         # 次の検出器への移動時間を計算
         if i < len(route_detectors) - 1:
+            # 次の検出器の時間を設定するための処理
             next_detector = route_detectors[i + 1]
-            travel_duration = calculate_moving_time_from_detector_to_detector(
-                detector, next_detector, walker_speed, variation_factor
+            duration_time_to_next_detector = (
+                calculate_moving_time_from_detector_to_detector(
+                    detector, next_detector, walker_speed, variation_factor
+                )
             )
-            current_time = departure_time + timedelta(seconds=travel_duration)
+            current_time = departure_time + timedelta(
+                seconds=duration_time_to_next_detector
+            )
 
     return stays
