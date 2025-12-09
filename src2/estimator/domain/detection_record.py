@@ -29,3 +29,4 @@ class DetectionRecord:
     detector_id: str  # 検出器ID
     sequence_number: int  # シーケンス番号（0-4095）
     is_judged: bool = False  # クラスタリング処理済みフラグ
+    cluster_id: str = ""  # 所属クラスタID（クラスタリング時に設定）

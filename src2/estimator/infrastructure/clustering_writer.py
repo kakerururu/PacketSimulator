@@ -95,6 +95,7 @@ def export_clustering_results(
                     "Detector_ID",
                     "Sequence_Number",
                     "Is_Judged",  # クラスタリングで使用されたか
+                    "Cluster_ID",  # 所属クラスタID
                 ]
             )
 
@@ -109,6 +110,7 @@ def export_clustering_results(
                         record.detector_id,
                         record.sequence_number,
                         record.is_judged,
+                        record.cluster_id,
                     ]
                 )
 
