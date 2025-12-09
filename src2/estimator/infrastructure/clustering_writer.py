@@ -1,4 +1,4 @@
-"""第1回目推定結果のCSV出力"""
+"""クラスタリング結果のCSV出力"""
 
 import csv
 from pathlib import Path
@@ -7,15 +7,15 @@ from ..domain.detection_record import DetectionRecord
 from ...shared.utils.datetime_utils import format_timestamp
 
 
-def export_first_pass_clusters(
+def export_clustering_results(
     grouped_records: Dict[str, List[DetectionRecord]],
-    output_dir: str = "src2_result/first_pass_clusters",
+    output_dir: str = "src2_result/clustering_results",
     clean_before: bool = True,
 ) -> Dict[str, any]:
-    """第1回目推定後のレコードをCSV出力
+    """クラスタリング後のレコードをCSV出力
 
     is_judged フラグの状態を含めて出力する。
-    これにより、どのレコードが第1回目の推定で使用されたかが分かる。
+    これにより、どのレコードがクラスタリングで使用されたかが分かる。
 
     Args:
         grouped_records: ハッシュ値ごとのレコードリスト（is_judged更新済み）
@@ -46,7 +46,7 @@ def export_first_pass_clusters(
         ...         )
         ...     ]
         ... }
-        >>> result = export_first_pass_clusters(records, "test_output")
+        >>> result = export_clustering_results(records, "test_output")
     """
     # 出力ディレクトリを作成
     output_path = Path(output_dir)
@@ -94,7 +94,7 @@ def export_first_pass_clusters(
                     "Walker_ID",
                     "Detector_ID",
                     "Sequence_Number",
-                    "Is_Judged",  # 第1回目で使用されたか
+                    "Is_Judged",  # クラスタリングで使用されたか
                 ]
             )
 
