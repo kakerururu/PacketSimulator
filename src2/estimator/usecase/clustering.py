@@ -15,6 +15,66 @@ from ..domain.estimated_trajectory import EstimatedTrajectory
 from ...shared.domain.detector import Detector
 from ...shared.utils.distance_calculator import calculate_min_travel_time
 
+# 定数
+MAX_STAY_DURATION = 900.0  # 最大滞在時間（15分）
+
+
+def _is_sequence_anomaly(
+    record1: DetectionRecord,
+    record2: DetectionRecord,
+    time_diff: float,
+    min_travel_time: float,
+    impossible_factor: float,
+) -> bool:
+    """シーケンス番号異常かチェック
+
+    Args:
+        record1: 前のレコード
+        record2: 次のレコード
+        time_diff: 時間差（秒）
+        min_travel_time: 最小移動時間（秒）
+        impossible_factor: ありえない移動判定係数
+
+    Returns:
+        シーケンス番号異常かどうか
+    """
+    seq_diff = abs(record2.sequence_number - record1.sequence_number)
+    return seq_diff > 64 and time_diff < min_travel_time * impossible_factor
+
+
+def _is_impossible_movement(
+    time_diff: float,
+    min_travel_time: float,
+    impossible_factor: float,
+) -> bool:
+    """ありえない移動かチェック
+
+    Args:
+        time_diff: 時間差（秒）
+        min_travel_time: 最小移動時間（秒）
+        impossible_factor: ありえない移動判定係数
+
+    Returns:
+        ありえない移動かどうか
+    """
+    return time_diff < min_travel_time * impossible_factor
+
+
+def _check_stay_time(
+    time_diff: float,
+    max_stay_duration: float = MAX_STAY_DURATION,
+) -> bool:
+    """滞在時間が許容範囲内かチェック
+
+    Args:
+        time_diff: 滞在時間（秒）
+        max_stay_duration: 最大滞在時間（秒、デフォルトはMAX_STAY_DURATION）
+
+    Returns:
+        滞在時間が許容範囲内かどうか
+    """
+    return time_diff <= max_stay_duration
+
 
 def cluster_records(
     grouped_records: Dict[str, List[DetectionRecord]],
@@ -138,19 +198,12 @@ def cluster_records(
                         stay_time_diff = (
                             candidate_record.timestamp - prev_record.timestamp
                         ).total_seconds()
-                        # TODO: この値は検討の余地あり
-                        # - 現在: 15分（900秒）にハードコード
-                        # - 検出エリアの特性によって適切な値は異なる
-                        #   - 通路・歩道: 数分が妥当
-                        #   - 公園・ショッピングモール: 数時間も妥当
-                        # - 将来的には設定ファイルから読み込むか、検出器ごとに設定可能にする検討が必要
-                        max_stay_duration = 900.0  # 15分
 
-                        if stay_time_diff > max_stay_duration:
+                        if not _check_stay_time(stay_time_diff):
                             # 最大滞在時間を超過 → このレコードをスキップして前方探索へ
                             print(
                                 f"[{cluster_id}] 滞在時間超過検出: "
-                                f"{cand_det_id}での滞在時間={stay_time_diff:.1f}s > 最大={max_stay_duration:.1f}s "
+                                f"{cand_det_id}での滞在時間={stay_time_diff:.1f}s > 最大={MAX_STAY_DURATION:.1f}s "
                                 f"→ 前方探索開始"
                             )
                             # 前方探索ロジックを実行（異なる検出器への到達可能なレコードを探す）
@@ -177,27 +230,27 @@ def cluster_records(
                     det_prev, det_cand, walker_speed
                 )
 
-                # シーケンス番号フィルタ: 大きなシーケンス差がある場合
-                seq_diff = abs(
-                    candidate_record.sequence_number - prev_record.sequence_number
+                # シーケンス番号フィルタとありえない移動の判定
+                is_seq_anomaly = _is_sequence_anomaly(
+                    prev_record, candidate_record, time_diff, min_travel_time, impossible_factor
                 )
-                # ありえない移動の判定（シーケンス番号チェック含む）
-                is_impossible_movement = time_diff < min_travel_time * impossible_factor
-                is_sequence_anomaly = seq_diff > 64 and is_impossible_movement
+                is_impossible = _is_impossible_movement(
+                    time_diff, min_travel_time, impossible_factor
+                )
 
-                if is_sequence_anomaly:
+                if is_seq_anomaly:
+                    seq_diff = abs(candidate_record.sequence_number - prev_record.sequence_number)
                     print(
                         f"[{cluster_id}] シーケンス番号異常検出: "
                         f"{prev_det_id}→{cand_det_id} "
                         f"(seq差={seq_diff} > 64, 時間差={time_diff:.1f}s < 必要時間={min_travel_time:.1f}s) "
                         f"→ 前方探索"
                     )
-                    # 前方探索に進む（下記のありえない移動処理と同じロジックを使う）
 
-                # ありえない移動または長時間滞在の判定（シーケンス異常も含む）
-                if is_impossible_movement or trigger_forward_search:
+                # ありえない移動または長時間滞在の判定 → 前方探索トリガー
+                if is_impossible or trigger_forward_search:
                     # ありえない移動または長時間滞在 → 前方を探索して到達可能なレコードを探す
-                    if is_impossible_movement:
+                    if is_impossible:
                         print(
                             f"[{cluster_id}] ありえない移動検出: "
                             f"{prev_det_id}→{cand_det_id} "
@@ -231,9 +284,8 @@ def cluster_records(
                                 stay_time_diff = (
                                     scan_record.timestamp - prev_record.timestamp
                                 ).total_seconds()
-                                max_stay_duration = 900.0  # 15分
 
-                                if stay_time_diff <= max_stay_duration:
+                                if _check_stay_time(stay_time_diff):
                                     # 妥当な滞在時間 → クラスタに追加して次の検出器を探し続ける
                                     scan_record.is_judged = True
                                     scan_record.cluster_id = cluster_id
@@ -261,15 +313,14 @@ def cluster_records(
                         )
 
                         # シーケンス番号フィルタ（前方探索でも適用）
-                        scan_seq_diff = abs(
-                            scan_record.sequence_number - prev_record.sequence_number
-                        )
-                        if scan_seq_diff > 64 and scan_time_diff < min_t_scan * impossible_factor:
+                        if _is_sequence_anomaly(
+                            prev_record, scan_record, scan_time_diff, min_t_scan, impossible_factor
+                        ):
                             # 異常レコードとしてスキップ
                             scan_idx += 1
                             continue
 
-                        if scan_time_diff >= min_t_scan * impossible_factor:
+                        if not _is_impossible_movement(scan_time_diff, min_t_scan, impossible_factor):
                             # 到達可能なレコード発見！
                             found_idx = scan_idx
                             print(
