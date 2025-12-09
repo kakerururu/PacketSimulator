@@ -50,21 +50,10 @@ def write_estimated_trajectories(
                 "stays": [
                     {
                         "detector_id": stay.detector_id,
-                        "detections": [
-                            {
-                                "timestamp": format_timestamp(det.timestamp),
-                                "hashed_id": det.hashed_id,
-                                "sequence_number": det.sequence_number,
-                                "is_judged": det.is_judged,
-                            }
-                            for det in stay.detections
-                        ],
+                        "num_detections": stay.num_detections,
                         "first_detection": format_timestamp(stay.first_detection),
                         "last_detection": format_timestamp(stay.last_detection),
-                        "estimated_arrival": format_timestamp(stay.estimated_arrival),
-                        "estimated_departure": format_timestamp(stay.estimated_departure),
-                        "estimated_duration_seconds": stay.estimated_duration_seconds,
-                        "num_detections": stay.num_detections,
+                        "duration_seconds": stay.estimated_duration_seconds,
                     }
                     for stay in traj.stays
                 ],
