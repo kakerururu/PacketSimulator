@@ -60,7 +60,7 @@ def write_detector_logs(
                 [
                     "Timestamp",
                     "Walker_ID",
-                    "Hashed_Payload",
+                    "Hashed_ID",
                     "Detector_ID",
                     "Sequence_Number",
                 ]
