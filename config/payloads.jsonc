@@ -5,33 +5,38 @@
         // どのデバイスとも**絶対に衝突しない**
         "Model_Group_A_DynamicUnique": {
             "overall_probability": 0.20,
-            "dynamic_unique_payload": true
+            "is_unique": true,
+            "payload_distribution": {}
         },
         //2. 一般型
         // **1種類**のハッシュ値しか出さないが、**衝突する可能性がある**
         // 減って見える効果
         "Model_B_01": {
             "overall_probability": 0.16,
+            "is_unique": false,
             "payload_distribution": {
-                "B_common_payload_X": 1.0
+                "B_common_hash_X": 1.0
             }
         },
         "Model_B_02": {
             "overall_probability": 0.08,
+            "is_unique": false,
             "payload_distribution": {
-                "B_common_payload_X": 1.0
+                "B_common_hash_X": 1.0
             }
         },
         "Model_B_03": {
             "overall_probability": 0.08,
+            "is_unique": false,
             "payload_distribution": {
-                "B_common_payload_Y": 1.0
+                "B_common_hash_Y": 1.0
             }
         },
         "Model_B_04": {
             "overall_probability": 0.08,
+            "is_unique": false,
             "payload_distribution": {
-                "B_common_payload_Y": 1.0
+                "B_common_hash_Y": 1.0
             }
         },
         //3. 限定変動型
@@ -41,97 +46,110 @@
         // 増えて見える効果
         "Model_C_01": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_01_base_payload": 0.9,
-                "C_01_sub_payload": 0.1
+                "C_01_base_hash": 0.9,
+                "C_01_sub_hash": 0.1
             }
         },
         "Model_C_02": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_02_base_payload": 0.9,
-                "C_02_sub_payload": 0.1
+                "C_02_base_hash": 0.9,
+                "C_02_sub_hash": 0.1
             }
         },
         "Model_C_03": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_03_base_payload": 0.9,
-                "C_03_sub_payload": 0.1
+                "C_03_base_hash": 0.9,
+                "C_03_sub_hash": 0.1
             }
         },
         "Model_C_04": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_04_base_payload": 0.9,
-                "C_04_sub_payload": 0.1
+                "C_04_base_hash": 0.9,
+                "C_04_sub_hash": 0.1
             }
         },
         "Model_C_05": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_05_base_payload": 0.9,
-                "C_05_sub_payload": 0.1
+                "C_05_base_hash": 0.9,
+                "C_05_sub_hash": 0.1
             }
         },
         "Model_C_06": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_06_base_payload": 0.9,
-                "C_06_sub_payload": 0.1
+                "C_06_base_hash": 0.9,
+                "C_06_sub_hash": 0.1
             }
         },
         "Model_C_07": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_07_base_payload": 0.9,
-                "C_07_sub_payload": 0.1
+                "C_07_base_hash": 0.9,
+                "C_07_sub_hash": 0.1
             }
         },
         "Model_C_08": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_08_base_payload": 0.9,
-                "C_08_sub_payload": 0.1
+                "C_08_base_hash": 0.9,
+                "C_08_sub_hash": 0.1
             }
         },
         "Model_C_09": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_09_base_payload": 0.9,
-                "C_09_sub_payload": 0.1
+                "C_09_base_hash": 0.9,
+                "C_09_sub_hash": 0.1
             }
         },
         "Model_C_10": {
             "overall_probability": 0.035,
+            "is_unique": false,
             "payload_distribution": {
-                "C_10_base_payload": 0.9,
-                "C_10_sub_payload": 0.1
+                "C_10_base_hash": 0.9,
+                "C_10_sub_hash": 0.1
             }
         },
         //4. 変動型
         // 複数のペイロードを放出し、類似などもしていない
         "Model_D_01": {
             "overall_probability": 0.016667,
+            "is_unique": false,
             "payload_distribution": {
-                "D_01_state1_payload": 0.3,
-                "D_01_state2_payload": 0.3,
-                "D_01_state3_payload": 0.4
+                "D_01_state1_hash": 0.3,
+                "D_01_state2_hash": 0.3,
+                "D_01_state3_hash": 0.4
             }
         },
         "Model_D_02": {
             "overall_probability": 0.016667,
+            "is_unique": false,
             "payload_distribution": {
-                "D_02_state1_payload": 0.3,
-                "D_02_state2_payload": 0.3,
-                "D_02_state3_payload": 0.4
+                "D_02_state1_hash": 0.3,
+                "D_02_state2_hash": 0.3,
+                "D_02_state3_hash": 0.4
             }
         },
         "Model_D_03": {
             "overall_probability": 0.016666,
+            "is_unique": false,
             "payload_distribution": {
-                "D_03_state1_payload": 0.5,
-                "D_03_state2_payload": 0.5
+                "D_03_state1_hash": 0.5,
+                "D_03_state2_hash": 0.5
             }
         }
     }

@@ -1,0 +1,10 @@
+{
+    "evaluation_settings": {
+        "matching_method": "dtw",           // "dtw", "euclidean", "threshold"
+        "time_threshold_seconds": 300,      // 閾値ベースマッチングの場合の時間閾値
+        "dtw_weight_time": 1.0,             // DTWの時間重み
+        "dtw_weight_location": 10.0,        // DTWの位置重み (異なる検出器は大きなペナルティ)
+        "clustering_method": "hierarchical", // 将来的な拡張用
+        "matching_threshold": 0.5           // マッチング閾値（類似度がこれ以上のペアのみマッチング）
+    }
+}
