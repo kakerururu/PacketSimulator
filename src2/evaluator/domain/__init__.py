@@ -6,7 +6,7 @@ from .trajectory import (
     GroundTruthTrajectory,
     EstimatedTrajectory,
 )
-from .time_window import (
+from .evaluation import (
     StayEvaluation,
     OverallMetrics,
     EvaluationResult,

@@ -3,7 +3,7 @@
 import json
 from dataclasses import asdict
 from pathlib import Path
-from ..domain.time_window import EvaluationResult
+from ..domain.evaluation import EvaluationResult
 
 
 def save_evaluation_result(result: EvaluationResult, file_path: str) -> None:

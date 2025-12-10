@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List
 
-from ..domain.time_window import EvaluationResult
+from ..domain.evaluation import EvaluationResult
 
 
 def save_evaluation_logs(
