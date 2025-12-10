@@ -60,26 +60,28 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path):
 
         # 評価方法の説明
         f.write("## 評価方法\n\n")
-        f.write("GT軌跡の**すべての滞在地点**で許容時間内に検出できた場合のみ、その軌跡を正しく推定できたと判定。\n\n")
-        f.write("**評価条件**:\n")
-        f.write("1. ルートパターンが一致（例: ABCD）\n")
-        f.write("2. 滞在数が一致\n")
-        f.write("3. すべての滞在地点で検出器IDが一致\n")
-        f.write(f"4. すべての滞在で検出時刻が許容範囲内（±{result.metadata['tolerance_seconds']}秒）\n\n")
-        f.write("**集計方法**:\n")
-        f.write("- ルートパターンごとに集計（例: A→B→C→Dというルート）\n")
-        f.write("- GT人数: そのルートを通った実際の人数\n")
-        f.write("- Est人数: 上記4条件をすべて満たした推定軌跡の数\n")
-        f.write("- 部分的なルートは評価対象外\n\n")
+        f.write("GT軌跡に時系列情報を付与し、Est軌跡を許容誤差でマッチングして評価する。\n\n")
+        f.write("**ルート名の生成**:\n")
+        f.write("- GT軌跡: 時系列情報付きルート名を生成\n")
+        f.write("  - 例: `ABDC_1100-1106_1452-1459_2008-2015_0008-0015`\n")
+        f.write("  - 各地点での滞在時刻（到着-出発）を含む\n\n")
+        f.write("**Est軌跡のマッチング**:\n")
+        tolerance_min = result.metadata['tolerance_seconds'] / 60
+        f.write(f"- Est軌跡をGTと許容誤差（±{tolerance_min:.0f}分）でマッチング\n")
+        f.write("- マッチした場合: GTと同じルート名でカウント\n")
+        f.write("- マッチしない場合: 独自のルート名で別ルートとしてカウント\n\n")
+        f.write("**評価対象**:\n")
+        f.write("- すべての検出器(A,B,C,D)を経由した完全ルートのみ評価対象\n")
+        f.write("- 部分ルート（一部検出器のみ経由）は評価対象外\n\n")
 
         # 全体指標
         m = result.overall_metrics
         f.write("## 全体評価指標\n\n")
         f.write(f"| 指標 | 値 | 説明 |\n")
         f.write(f"|------|-----|------|\n")
-        f.write(f"| 評価したルート数 | {m.total_stays} | ルートパターンの種類数 |\n")
+        f.write(f"| 評価したルート数（時系列含む） | {m.total_stays} | 時系列情報を含むルートの種類数 |\n")
         f.write(f"| GT軌跡総数 | {m.total_gt_count}人 | 全ルート合計のGT人数 |\n")
-        f.write(f"| Est軌跡総数（条件満たす） | {m.total_est_count}人 | 4条件を満たしたEst軌跡数 |\n")
+        f.write(f"| Est軌跡総数（完全ルート） | {m.total_est_count}人 | 評価対象のEst軌跡数 |\n")
         f.write(f"| 総絶対誤差 | {m.total_absolute_error} | 全ルートの誤差の合計 |\n")
         f.write(f"| **MAE** (平均絶対誤差) | **{m.mae:.3f}** | ルートあたりの平均誤差 |\n")
         f.write(f"| **RMSE** (二乗平均平方根誤差) | **{m.rmse:.3f}** | 大きな誤差にペナルティ |\n")
@@ -113,7 +115,8 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path):
         f.write("### ルート別の統計\n\n")
         f.write("| ルート | GT人数 | Est人数 | 誤差 | 正確一致 |\n")
         f.write("|--------|--------|---------|------|----------|\n")
-        for se in result.stay_evaluations:
+        sorted_evaluations = sorted(result.stay_evaluations, key=lambda x: x.detector_id)
+        for se in sorted_evaluations:
             match_status = "✓" if se.error == 0 else "✗"
             f.write(f"| {se.detector_id} | {se.gt_count} | {se.est_count} | {se.error} | {match_status} |\n")
         f.write("\n")
@@ -150,8 +153,9 @@ def _save_route_evaluations_csv(result: EvaluationResult, filepath: Path):
             "est_trajectory_ids"
         ])
 
-        # データ
-        for se in result.stay_evaluations:
+        # データ（アルファベット順）
+        sorted_evaluations = sorted(result.stay_evaluations, key=lambda x: x.detector_id)
+        for se in sorted_evaluations:
             writer.writerow([
                 se.detector_id,  # ルート名
                 se.gt_count,
