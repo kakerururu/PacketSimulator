@@ -6,17 +6,18 @@ from .trajectory import (
     GroundTruthTrajectory,
     EstimatedTrajectory,
 )
-from .matched_pair import MatchedPair, StayComparison, UnmatchedTrajectory
-from .evaluation_result import EvaluationResult, OverallMetrics
+from .time_window import (
+    StayEvaluation,
+    OverallMetrics,
+    EvaluationResult,
+)
 
 __all__ = [
     "GroundTruthStay",
     "EstimatedStay",
     "GroundTruthTrajectory",
     "EstimatedTrajectory",
-    "MatchedPair",
-    "StayComparison",
-    "UnmatchedTrajectory",
-    "EvaluationResult",
+    "StayEvaluation",
     "OverallMetrics",
+    "EvaluationResult",
 ]

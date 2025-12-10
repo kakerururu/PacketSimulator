@@ -1,6 +1,7 @@
 """Trajectory Evaluator
 
-Ground Truth軌跡とEstimated軌跡を1対1でマッチングし、精度を評価するモジュール。
+GT軌跡のすべての滞在地点で許容時間内に検出できた場合のみ、
+正しく推定できたと判定する軌跡ベース評価モジュール。
 """
 
 from .domain import (
@@ -8,22 +9,19 @@ from .domain import (
     EstimatedStay,
     GroundTruthTrajectory,
     EstimatedTrajectory,
-    MatchedPair,
-    StayComparison,
-    UnmatchedTrajectory,
+    StayEvaluation,
     EvaluationResult,
     OverallMetrics,
 )
 from .usecase import (
     evaluate_trajectories,
     EvaluationConfig,
-    check_stay_match,
-    check_trajectory_match,
 )
 from .infrastructure import (
     load_ground_truth_trajectories,
     load_estimated_trajectories,
     save_evaluation_result,
+    save_evaluation_logs,
 )
 
 __all__ = [
@@ -32,18 +30,15 @@ __all__ = [
     "EstimatedStay",
     "GroundTruthTrajectory",
     "EstimatedTrajectory",
-    "MatchedPair",
-    "StayComparison",
-    "UnmatchedTrajectory",
+    "StayEvaluation",
     "EvaluationResult",
     "OverallMetrics",
     # Usecase
     "evaluate_trajectories",
     "EvaluationConfig",
-    "check_stay_match",
-    "check_trajectory_match",
     # Infrastructure
     "load_ground_truth_trajectories",
     "load_estimated_trajectories",
     "save_evaluation_result",
+    "save_evaluation_logs",
 ]
