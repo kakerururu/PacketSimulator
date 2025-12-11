@@ -11,32 +11,47 @@
         //2. 一般型
         // **1種類**のハッシュ値しか出さないが、**衝突する可能性がある**
         // 減って見える効果
+        // 3種類のハッシュに均等分配（各13.33%）
         "Model_B_01": {
-            "overall_probability": 0.16,
+            "overall_probability": 0.0667,
             "is_unique": false,
             "payload_distribution": {
                 "B_common_hash_X": 1.0
             }
         },
         "Model_B_02": {
-            "overall_probability": 0.08,
+            "overall_probability": 0.0667,
             "is_unique": false,
             "payload_distribution": {
                 "B_common_hash_X": 1.0
             }
         },
         "Model_B_03": {
-            "overall_probability": 0.08,
+            "overall_probability": 0.0667,
             "is_unique": false,
             "payload_distribution": {
                 "B_common_hash_Y": 1.0
             }
         },
         "Model_B_04": {
-            "overall_probability": 0.08,
+            "overall_probability": 0.0667,
             "is_unique": false,
             "payload_distribution": {
                 "B_common_hash_Y": 1.0
+            }
+        },
+        "Model_B_05": {
+            "overall_probability": 0.0666,
+            "is_unique": false,
+            "payload_distribution": {
+                "B_common_hash_Z": 1.0
+            }
+        },
+        "Model_B_06": {
+            "overall_probability": 0.0666,
+            "is_unique": false,
+            "payload_distribution": {
+                "B_common_hash_Z": 1.0
             }
         },
         //3. 限定変動型
