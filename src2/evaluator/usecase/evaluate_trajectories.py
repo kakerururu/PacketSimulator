@@ -241,11 +241,13 @@ def evaluate_trajectories(
 
     if total_routes > 0:
         mae = sum(errors) / total_routes
-        rmse = math.sqrt(sum(e**2 for e in errors) / total_routes)
+        mse = sum(e**2 for e in errors) / total_routes
+        rmse = math.sqrt(mse)
         exact_matches = sum(1 for e in errors if e == 0)
         exact_match_rate = exact_matches / total_routes
     else:
         mae = 0.0
+        mse = 0.0
         rmse = 0.0
         exact_match_rate = 0.0
 
@@ -255,6 +257,7 @@ def evaluate_trajectories(
     overall_metrics = OverallMetrics(
         total_stays=total_routes,  # ルート数
         mae=mae,
+        mse=mse,
         rmse=rmse,
         exact_match_rate=exact_match_rate,
         total_gt_count=len(gt_trajectories),
