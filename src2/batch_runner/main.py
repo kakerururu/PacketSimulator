@@ -7,13 +7,13 @@ Usage:
     python -m src2.batch_runner.main --num-walkers 50 100 200 --runs 30
 
 Examples:
-    # 3条件 × 30回 = 90回のシミュレーション
+    # 3条件 × 30回 = 90回のシミュレーション（毎回異なるランダムシード）
     python -m src2.batch_runner.main \\
         --num-walkers 50 100 200 \\
         --runs 30 \\
         --output-dir experiments/
 
-    # 少ない回数でテスト
+    # 再現性のためにシードを固定
     python -m src2.batch_runner.main \\
         --num-walkers 10 20 \\
         --runs 3 \\
@@ -21,6 +21,7 @@ Examples:
 """
 
 import argparse
+import random
 
 from .domain.experiment_config import ExperimentConfig
 from .usecase.run_experiments import run_experiments
@@ -59,18 +60,27 @@ Examples:
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
-        help="乱数シードのベース値（デフォルト: 42）",
+        default=None,
+        help="乱数シードのベース値（省略時: ランダム、指定時: 再現可能）",
     )
 
     args = parser.parse_args()
+
+    # シードが指定されていない場合はランダムに生成
+    if args.seed is None:
+        base_seed = random.randint(0, 2**31 - 1)
+        print(f"ランダムシード使用: {base_seed}")
+        print("（再現するには --seed {0} を指定）".format(base_seed))
+    else:
+        base_seed = args.seed
+        print(f"固定シード使用: {base_seed}")
 
     # 実験設定を構築
     config = ExperimentConfig(
         num_walkers_list=args.num_walkers,
         num_runs=args.runs,
         output_dir=args.output_dir,
-        base_seed=args.seed,
+        base_seed=base_seed,
     )
 
     # 実験を実行
