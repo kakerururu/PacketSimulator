@@ -11,6 +11,7 @@ from .config_loader import load_detectors, load_simulation_settings
 
 def write_ground_truth(
     trajectories: List[Trajectory],
+    output_file: str = "src2_result/ground_truth/trajectories.json",
 ) -> None:
     """Ground Truth JSONを書き込む
 
@@ -18,6 +19,7 @@ def write_ground_truth(
 
     Args:
         trajectories: 軌跡のリスト
+        output_file: 出力先JSONファイルパス
 
     Notes:
         - plan.mdの仕様に従った詳細なGround Truthを出力
@@ -37,7 +39,7 @@ def write_ground_truth(
     simulation_settings = load_simulation_settings()
 
     # 出力ディレクトリを作成
-    output_path = Path("src2_result/ground_truth/trajectories.json")
+    output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # メタデータ
