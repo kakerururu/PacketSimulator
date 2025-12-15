@@ -6,18 +6,22 @@ from .infrastructure.grouped_records_writer import export_grouped_records
 from .infrastructure.clustering_writer import export_clustering_results
 from .usecase.group_by_payload import group_records_by_payload
 from .usecase.estimate_trajectories import estimate_trajectories
-from ..generator.infrastructure.config_loader import load_detectors
+from ..generator.infrastructure.config_loader import load_detectors, load_simulation_settings
 
 
 def main():
     """メイン実行関数"""
     print("=== 軌跡推定開始 ===" )
 
-    # 0. 検出器設定を読み込み
-    print("\n[Phase 0] 検出器設定を読み込み中...")
+    # 0. 設定を読み込み
+    print("\n[Phase 0] 設定を読み込み中...")
     detectors_list = load_detectors()
     detectors = {d.id: d for d in detectors_list}
+    settings = load_simulation_settings()
+    walker_speed = settings.get("walker_speed", 1.4)
+    impossible_factor = settings.get("impossible_factor", 0.8)
     print(f"✓ 読み込んだ検出器数: {len(detectors)}")
+    print(f"✓ 歩行速度: {walker_speed} m/s, impossible_factor: {impossible_factor}")
 
     # 1. 検出ログCSVを読み込み
     print("\n[Phase 1] 検出ログCSVを読み込み中...")
@@ -50,7 +54,9 @@ def main():
         detectors=detectors,
         max_passes=10,
         output_per_pass=True,
-        output_base_dir="src2_result/clustering_results"
+        output_base_dir="src2_result/clustering_results",
+        walker_speed=walker_speed,
+        impossible_factor=impossible_factor,
     )
     print(f"\n✓ 推定された軌跡数: {len(estimated_trajectories)}")
 
