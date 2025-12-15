@@ -11,19 +11,17 @@ from ...shared.utils.distance_calculator import calculate_min_travel_time
 from .clustering_utils import (
     MAX_STAY_DURATION,
     is_sequence_anomaly,
-    is_impossible_movement,
-    is_valid_stay_duration,
 )
 
 
-def _evaluate_candidate_record(
+def _judge_candidate_record(
     state: ClusterState,
     candidate_record: DetectionRecord,
     config: ClusteringConfig,
 ) -> RecordAction:
-    """候補レコードを評価してアクションを決定
+    """候補レコードを判定してアクションを決定
 
-    メインループで次の候補レコードを評価し、取るべきアクションを返す。
+    メインループで次の候補レコードを判定し、取るべきアクションを返す。
 
     【判定条件】
 
@@ -54,49 +52,43 @@ def _evaluate_candidate_record(
     # =========================================================================
     # 同じ検出器での滞在判定
     # =========================================================================
-    # 候補レコードが現在の検出器と同じ場合、「滞在の継続」として扱う。
-    # 滞在時間が許容範囲内（デフォルト900秒）なら追加、超過なら前方探索。
     if cand_det_id == current_detector:
-        if config.allow_long_stays:
-            # 長時間滞在を許可 → 無条件で追加
+        if config.allow_long_stays:  # 長時間滞在を許可
             return RecordAction.ADD_AS_STAY
 
         stay_time = (candidate_record.timestamp - prev_record.timestamp).total_seconds()
-        if is_valid_stay_duration(stay_time):
-            # 滞在時間が許容範囲内 → cluster_recordsに追加（推定経路には追加しない）
-            return RecordAction.ADD_AS_STAY
+        if stay_time <= MAX_STAY_DURATION:
+            return RecordAction.ADD_AS_STAY  # 滞在時間内
         else:
-            # 滞在時間超過 → 前方探索で別の検出器を探す
             print(
                 f"[{state.cluster_id}] 滞在時間超過検出: "
                 f"{cand_det_id}での滞在時間={stay_time:.1f}s > 最大={MAX_STAY_DURATION:.1f}s "
                 f"→ 前方探索開始"
             )
-            return RecordAction.FORWARD_SEARCH
+            return RecordAction.FORWARD_SEARCH  # 滞在時間超過しているので前方探索
 
     # =========================================================================
     # 異なる検出器への移動判定
     # =========================================================================
-    # 候補レコードが異なる検出器の場合、「移動の可能性」を判定する。
-    # 最小移動時間より短い時間での到着は「ありえない移動」。
     else:
         move_time = (candidate_record.timestamp - prev_record.timestamp).total_seconds()
-        det_prev = config.detectors[prev_det_id]
-        det_cand = config.detectors[cand_det_id]
         min_travel_time = calculate_min_travel_time(
-            det_prev, det_cand, config.walker_speed
+            config.detectors[prev_det_id],  # 検知器のIDを指定してその検知器の情報を取得
+            config.detectors[cand_det_id],
+            config.walker_speed,
         )
 
-        if is_impossible_movement(move_time, min_travel_time, config.impossible_factor):
+        # ありえない移動かの判定。impossible_factorによって誤差を考慮
+        if move_time < min_travel_time * config.impossible_factor:
             print(
                 f"[{state.cluster_id}] ありえない移動検出: "
                 f"{prev_det_id}→{cand_det_id} "
-                f"(時間差: {move_time:.1f}s < 必要時間: {min_travel_time:.1f}s)"
+                f"(移動時間={move_time:.1f}s < 最小移動時間{min_travel_time:.1f}s×{config.impossible_factor}"
             )
             return RecordAction.FORWARD_SEARCH
-
-        # 正常な移動 → cluster_recordsにレコードを追加、推定経路にも検出器IDを追加
-        return RecordAction.ADD_AS_MOVE
+        else:
+            # 正常な移動 → cluster_recordsにレコードを追加、推定経路にも検出器IDを追加
+            return RecordAction.ADD_AS_MOVE
 
 
 def _evaluate_scan_record(
@@ -173,11 +165,9 @@ def _evaluate_scan_record(
             return ForwardSearchAction.ADD_AND_CONTINUE
 
         stay_time_diff = (scan_record.timestamp - prev_record.timestamp).total_seconds()
-        if is_valid_stay_duration(stay_time_diff):
-            # 滞在時間OK → 追加して探索継続
-            return ForwardSearchAction.ADD_AND_CONTINUE
-        # 滞在時間超過 → スキップ
-        return ForwardSearchAction.SKIP
+        if stay_time_diff <= MAX_STAY_DURATION:
+            return ForwardSearchAction.ADD_AND_CONTINUE  # 滞在時間内
+        return ForwardSearchAction.SKIP  # 滞在時間超過
 
     # =========================================================================
     # ループ回避
@@ -203,7 +193,7 @@ def _evaluate_scan_record(
         return ForwardSearchAction.SKIP
 
     # ありえない移動チェック
-    if is_impossible_movement(scan_time_diff, min_t_scan, config.impossible_factor):
+    if scan_time_diff < min_t_scan * config.impossible_factor:
         return ForwardSearchAction.SKIP
 
     # 到達可能なレコード発見！
@@ -309,7 +299,7 @@ def _cluster_one_group(
     1. 最初の未使用レコードを探す
     2. ClusterState を初期化
     3. メインループ:
-       - 候補レコードを評価 (_evaluate_candidate_record)
+       - 候補レコードを判定 (_judge_candidate_record)
        - ADD_AS_STAY → cluster_recordsにレコードを追加（推定経路には追加しない）
        - ADD_AS_MOVE → cluster_recordsにレコードを追加、推定経路にも検出器IDを追加
        - FORWARD_SEARCH → 前方探索で到達可能なレコードを探す
@@ -364,8 +354,8 @@ def _cluster_one_group(
             idx += 1
             continue
 
-        # 候補レコードを評価
-        action = _evaluate_candidate_record(state, candidate, config)
+        # 候補レコードを判定
+        action = _judge_candidate_record(state, candidate, config)
 
         if action == RecordAction.ADD_AS_STAY:
             # 滞在継続: cluster_recordsにレコードを追加（推定経路には追加しない）
