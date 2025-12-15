@@ -12,7 +12,7 @@ from .infrastructure.csv_reader import read_detector_logs
 from .infrastructure.json_writer import write_estimated_trajectories
 from .usecase.group_by_payload import group_records_by_payload
 from .usecase.estimate_trajectories import estimate_trajectories
-from ..generator.infrastructure.config_loader import load_detectors
+from ..generator.infrastructure.config_loader import load_detectors, load_simulation_settings
 
 
 def run_estimator(
@@ -42,9 +42,12 @@ def run_estimator(
     detector_logs_dir = str(Path(input_dir) / "detector_logs")
     estimated_file = str(Path(output_dir) / "estimated" / "trajectories.json")
 
-    # 検出器設定を読み込み
+    # 設定を読み込み
     detectors_list = load_detectors()
     detectors = {d.id: d for d in detectors_list}
+    settings = load_simulation_settings()
+    walker_speed = settings.get("walker_speed", 1.4)
+    impossible_factor = settings.get("impossible_factor", 0.8)
 
     # 検出ログCSVを読み込み
     detection_records = read_detector_logs(detector_logs_dir)
@@ -72,6 +75,8 @@ def run_estimator(
             detectors=detectors,
             max_passes=10,
             output_per_pass=False,  # バッチ実行時は中間出力しない
+            walker_speed=walker_speed,
+            impossible_factor=impossible_factor,
         )
     finally:
         if not verbose:

@@ -5,6 +5,7 @@
         "walker_speed": 1.4, // 歩行者の平均速度 (m/s)
         "variation_factor": 0.1, // 歩行者の速度の変動係数
         "stay_duration_min_seconds": 400, // 滞在時間の最小値（秒）
-        "stay_duration_max_seconds": 420 // 滞在時間の最大値（秒）
+        "stay_duration_max_seconds": 420, // 滞在時間の最大値（秒）
+        "impossible_factor": 0.8 // ありえない移動判定の係数（estimatorで使用）
     }
 }

@@ -29,6 +29,7 @@ class OverallMetrics:
     """全体の評価指標"""
     total_stays: int                      # 評価したGT滞在の総数
     mae: float                            # Mean Absolute Error
+    mse: float                            # Mean Squared Error
     rmse: float                           # Root Mean Squared Error
     exact_match_rate: float               # 人数が完全一致した割合
     total_gt_count: int                   # GT軌跡の総数
