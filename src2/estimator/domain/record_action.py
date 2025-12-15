@@ -15,7 +15,16 @@ class RecordAction(Enum):
 
     # このレコードをスキップ（現在は使用されていない）
     SKIP = auto()
-    # Todo これはフラグをtrueにするのかしないのか
+
+
+class RouteUpdate(Enum):
+    """クラスタ追加時の経路更新タイプ"""
+
+    # 同じ検出器での滞在継続（経路には追加しない）
+    STAY = auto()
+
+    # 新しい検出器への移動（経路に追加する）
+    MOVE = auto()
 
 
 class ForwardSearchAction(Enum):

@@ -1,90 +1,13 @@
-"""レコードのクラスタリング
-
-=============================================================================
-【アルゴリズム概要】
-=============================================================================
-
-このモジュールは、同一ハッシュ値を持つ複数のパケット検知レコードを
-「物理的制約」に基づいて個々人の移動経路に分離する。
-
-【核心的アイデア】
-人間は瞬間移動できない。したがって、2つの検出器間の「最小移動時間」より
-短い時間で移動したレコードは「別人のもの」と判断できる。
-
-【主要パラメータ】
-- walker_speed: 歩行速度（デフォルト 1.4 m/s）
-- impossible_factor: ありえない移動判定係数（デフォルト 0.8）
-  → 最小移動時間の80%未満で到着 = ありえない
-
-【アルゴリズムフロー】
-
-  レコードを時系列順に走査
-         │
-         ▼
-  ┌────────────────────┐
-  │ 候補レコードを評価  │ → _evaluate_candidate_record()
-  └────────────────────┘
-         │
-    ┌────┴────┐
-    │同じ検出器？│
-    └────┬────┘
-         │
-    YES─┴─NO
-    │     │
-    ▼     ▼
-  ┌─────┐  ┌──────────────┐
-  │滞在判定│  │移動可能性判定  │
-  └─────┘  └──────────────┘
-    │         │
-    │    ┌────┴────┐
-    │    │ありえない？│
-    │    └────┬────┘
-    │         │
-    │    YES─┴─NO
-    │     │     │
-    │     ▼     ▼
-    │  ┌────────┐ ┌──────────┐
-    │  │前方探索 │ │クラスタ追加│
-    │  └────────┘ └──────────┘
-    │     │         → _forward_search()
-    ▼     ▼
-  ┌────────────────────────────┐
-  │ 到達可能なレコードを発見？   │
-  └────────────────────────────┘
-         │
-    YES─┴─NO
-    │     │
-    ▼     ▼
-  継続   クラスタ終了
-
-【前方探索とは】
-ありえない移動を検出した場合、現在のレコードをスキップして
-先のレコードの中から「到達可能」なものを探す処理。
-
-【複数パス処理】
-1回のクラスタリングでは各ハッシュグループから1つのクラスタのみ抽出。
-is_judged=False のレコードが残っている限り、複数回呼び出して
-すべてのレコードをクラスタ化する。
-
-=============================================================================
-"""
-
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
-
-# ドメインオブジェクト
 from ..domain.detection_record import DetectionRecord
 from ..domain.estimated_stay import EstimatedStay
 from ..domain.estimated_trajectory import EstimatedTrajectory
 from ..domain.cluster_state import ClusterState
 from ..domain.clustering_config import ClusteringConfig
-from ..domain.record_action import RecordAction, ForwardSearchAction
-
-# 共有ユーティリティ
+from ..domain.record_action import RecordAction, RouteUpdate, ForwardSearchAction
 from ...shared.domain.detector import Detector
 from ...shared.utils.distance_calculator import calculate_min_travel_time
-
-# クラスタリング用ユーティリティ（純粋関数群）
 from .clustering_utils import (
     MAX_STAY_DURATION,
     is_sequence_anomaly,
@@ -93,79 +16,88 @@ from .clustering_utils import (
 )
 
 
-# =============================================================================
-# レコード評価関数
-# =============================================================================
-
-
 def _evaluate_candidate_record(
     state: ClusterState,
-    candidate: DetectionRecord,
+    candidate_record: DetectionRecord,
     config: ClusteringConfig,
-) -> Tuple[RecordAction, bool]:
+) -> Tuple[RecordAction, RouteUpdate]:
     """候補レコードを評価してアクションを決定
 
     メインループで次の候補レコードを評価し、取るべきアクションを返す。
 
+    【判定条件】
+
+    1. 同じ検出器での滞在:
+       - allow_long_stays=True → 無条件で追加
+       - allow_long_stays=False → 滞在時間 <= 900秒なら追加、超過なら前方探索
+
+    2. 異なる検出器への移動:
+       - 時間差 >= 最小移動時間 × 0.8 → 追加（到達可能）
+       - 時間差 < 最小移動時間 × 0.8 → 前方探索（ありえない移動）
+
     Args:
         state: 現在のクラスタ状態
-        candidate: 評価対象の候補レコード
+        candidate_record: 評価対象の候補レコード
         config: クラスタリング設定
 
     Returns:
-        (RecordAction, add_to_route)
+        (RecordAction, RouteUpdate)
         - RecordAction: 取るべきアクション
-        - add_to_route: クラスタ追加時に経路にも追加するか
+        - RouteUpdate: 経路更新タイプ
+          - STAY: 同じ検出器での滞在継続（経路には追加しない）
+          - MOVE: 新しい検出器への移動（経路に追加する）
     """
     prev_record = state.prev_record
     prev_det_id = prev_record.detector_id
-    cand_det_id = candidate.detector_id
+    cand_det_id = candidate_record.detector_id
     current_detector = state.route_sequence[-1] if state.route_sequence else None
 
-    # === 同じ検出器での滞在判定 ===
+    # =========================================================================
+    # 同じ検出器での滞在判定
+    # =========================================================================
+    # 候補レコードが現在の検出器と同じ場合、「滞在の継続」として扱う。
+    # 滞在時間が許容範囲内（デフォルト900秒）なら追加、超過なら前方探索。
     if cand_det_id == current_detector:
         if config.allow_long_stays:
-            return RecordAction.ADD_TO_CLUSTER, False
+            # 長時間滞在を許可 → 無条件で追加
+            return RecordAction.ADD_TO_CLUSTER, RouteUpdate.STAY
 
-        stay_time_diff = (candidate.timestamp - prev_record.timestamp).total_seconds()
-        if is_valid_stay_duration(stay_time_diff):
-            return RecordAction.ADD_TO_CLUSTER, False
+        stay_time = (candidate_record.timestamp - prev_record.timestamp).total_seconds()
+        if is_valid_stay_duration(stay_time):
+            # 滞在時間が許容範囲内 → 追加（経路には追加しない）
+            return RecordAction.ADD_TO_CLUSTER, RouteUpdate.STAY
         else:
+            # 滞在時間超過 → 前方探索で別の検出器を探す
             print(
                 f"[{state.cluster_id}] 滞在時間超過検出: "
-                f"{cand_det_id}での滞在時間={stay_time_diff:.1f}s > 最大={MAX_STAY_DURATION:.1f}s "
+                f"{cand_det_id}での滞在時間={stay_time:.1f}s > 最大={MAX_STAY_DURATION:.1f}s "
                 f"→ 前方探索開始"
             )
-            return RecordAction.FORWARD_SEARCH, False
+            return RecordAction.FORWARD_SEARCH, RouteUpdate.STAY
 
-    # === 異なる検出器への移動判定 ===
-    time_diff = (candidate.timestamp - prev_record.timestamp).total_seconds()
-    det_prev = config.detectors[prev_det_id]
-    det_cand = config.detectors[cand_det_id]
-    min_travel_time = calculate_min_travel_time(det_prev, det_cand, config.walker_speed)
-
-    # シーケンス番号異常チェック（ログ出力のみ）
-    if is_sequence_anomaly(
-        prev_record, candidate, time_diff, min_travel_time, config.impossible_factor
-    ):
-        seq_diff = abs(candidate.sequence_number - prev_record.sequence_number)
-        print(
-            f"[{state.cluster_id}] シーケンス番号異常検出: "
-            f"{prev_det_id}→{cand_det_id} "
-            f"(seq差={seq_diff} > 64, 時間差={time_diff:.1f}s < 必要時間={min_travel_time:.1f}s) "
-            f"→ 前方探索"
+    # =========================================================================
+    # 異なる検出器への移動判定
+    # =========================================================================
+    # 候補レコードが異なる検出器の場合、「移動の可能性」を判定する。
+    # 最小移動時間より短い時間での到着は「ありえない移動」。
+    else:
+        move_time = (candidate_record.timestamp - prev_record.timestamp).total_seconds()
+        det_prev = config.detectors[prev_det_id]
+        det_cand = config.detectors[cand_det_id]
+        min_travel_time = calculate_min_travel_time(
+            det_prev, det_cand, config.walker_speed
         )
 
-    # ありえない移動チェック
-    if is_impossible_movement(time_diff, min_travel_time, config.impossible_factor):
-        print(
-            f"[{state.cluster_id}] ありえない移動検出: "
-            f"{prev_det_id}→{cand_det_id} "
-            f"(時間差: {time_diff:.1f}s < 必要時間: {min_travel_time:.1f}s)"
-        )
-        return RecordAction.FORWARD_SEARCH, False
+        if is_impossible_movement(move_time, min_travel_time, config.impossible_factor):
+            print(
+                f"[{state.cluster_id}] ありえない移動検出: "
+                f"{prev_det_id}→{cand_det_id} "
+                f"(時間差: {move_time:.1f}s < 必要時間: {min_travel_time:.1f}s)"
+            )
+            return RecordAction.FORWARD_SEARCH, RouteUpdate.STAY
 
-    return RecordAction.ADD_TO_CLUSTER, True
+        # 正常な移動 → クラスタに追加（経路にも追加）
+        return RecordAction.ADD_TO_CLUSTER, RouteUpdate.MOVE
 
 
 def _evaluate_scan_record(
@@ -175,6 +107,45 @@ def _evaluate_scan_record(
 ) -> ForwardSearchAction:
     """前方探索中のレコードを評価
 
+    前方探索で各レコードを評価し、取るべきアクションを返す。
+
+    【処理フロー】
+
+        スキャン対象レコード
+              │
+              ▼
+         ┌─────────┐
+         │使用済み？│
+         └─────────┘
+              │
+         YES─┴─NO
+          │     │
+          ▼     ▼
+        SKIP   続行
+                │
+                ▼
+         ┌───────────┐
+         │同じ検出器？│
+         └───────────┘
+              │
+         YES─┴─NO
+          │     │
+          ▼     ▼
+        滞在判定  移動判定
+          │       │
+          ▼       ▼
+        ADD_    FOUND
+        CONTINUE  or SKIP
+
+    【メインループとの違い】
+    - シーケンス番号異常: 前方探索では実際にスキップ判定に使用
+    - ループ回避: 既に経路に含まれる検出器はスキップ
+
+    【各アクションの意味】
+    - SKIP: このレコードをスキップして次へ
+    - ADD_AND_CONTINUE: クラスタに追加して探索継続（まだ次の検出器未発見）
+    - FOUND: 到達可能なレコード発見！探索終了
+
     Args:
         state: 現在のクラスタ状態
         scan_record: 評価対象のレコード
@@ -183,6 +154,9 @@ def _evaluate_scan_record(
     Returns:
         ForwardSearchAction: 取るべきアクション
     """
+    # =========================================================================
+    # 使用済みチェック
+    # =========================================================================
     if scan_record.is_judged:
         return ForwardSearchAction.SKIP
 
@@ -190,37 +164,50 @@ def _evaluate_scan_record(
     prev_det_id = prev_record.detector_id
     current_detector = state.route_sequence[-1] if state.route_sequence else None
 
-    # === 同じ検出器での滞在継続判定 ===
+    # =========================================================================
+    # 同じ検出器での滞在継続判定
+    # =========================================================================
+    # 同じ検出器のレコードは「滞在の継続」として扱う。
+    # クラスタに追加しつつ、次の検出器を探し続ける。
     if scan_record.detector_id == current_detector:
         if config.allow_long_stays:
             return ForwardSearchAction.ADD_AND_CONTINUE
 
-        stay_time_diff = (
-            scan_record.timestamp - prev_record.timestamp
-        ).total_seconds()
+        stay_time_diff = (scan_record.timestamp - prev_record.timestamp).total_seconds()
         if is_valid_stay_duration(stay_time_diff):
+            # 滞在時間OK → 追加して探索継続
             return ForwardSearchAction.ADD_AND_CONTINUE
+        # 滞在時間超過 → スキップ
         return ForwardSearchAction.SKIP
 
-    # === ループ回避 ===
+    # =========================================================================
+    # ループ回避
+    # =========================================================================
+    # 既に経路に含まれている検出器は、ループを避けるためスキップ。
+    # 例: 経路が A→B→C の場合、A や B には戻らない
     if scan_record.detector_id in state.route_sequence:
         return ForwardSearchAction.SKIP
 
-    # === 到達可能性を判定 ===
+    # =========================================================================
+    # 到達可能性を判定
+    # =========================================================================
     scan_time_diff = (scan_record.timestamp - prev_record.timestamp).total_seconds()
     det_prev = config.detectors[prev_det_id]
     det_scan = config.detectors[scan_record.detector_id]
     min_t_scan = calculate_min_travel_time(det_prev, det_scan, config.walker_speed)
 
-    # シーケンス番号異常はスキップ（前方探索では実際に判定に使用）
+    # シーケンス番号異常チェック
+    # 【重要】前方探索では実際にスキップ判定に使用（メインループとの違い）
     if is_sequence_anomaly(
         prev_record, scan_record, scan_time_diff, min_t_scan, config.impossible_factor
     ):
         return ForwardSearchAction.SKIP
 
+    # ありえない移動チェック
     if is_impossible_movement(scan_time_diff, min_t_scan, config.impossible_factor):
         return ForwardSearchAction.SKIP
 
+    # 到達可能なレコード発見！
     return ForwardSearchAction.FOUND
 
 
@@ -237,8 +224,28 @@ def _forward_search(
 ) -> Optional[int]:
     """前方探索: 到達可能なレコードを探す
 
+    「ありえない移動」または「滞在時間超過」を検出した場合に呼び出される。
+    先のレコードを順にスキャンし、到達可能なレコードを探す。
+
+    【処理の流れ】
+
+    例: 現在位置が検出器A（idx=5）で、ありえない移動を検出した場合
+
+      idx  検出器  評価結果
+      ───────────────────────
+       5    B     ← ありえない移動を検出（この関数が呼ばれる）
+       6    B     SKIP（まだありえない）
+       7    A     ADD_AND_CONTINUE（滞在継続、クラスタに追加）
+       8    C     SKIP（ループ：経路に含まれる場合）
+       9    D     FOUND！（到達可能）← このインデックスを返す
+
+    【同じ検出器のレコードについて】
+    前方探索中に同じ検出器のレコードを見つけた場合は、
+    「滞在の継続」としてクラスタに追加しつつ探索を継続する。
+    これにより、prev_record が更新され、後続の到達可能性判定が正確になる。
+
     Args:
-        state: 現在のクラスタ状態
+        state: 現在のクラスタ状態（探索中に更新される）
         records: レコードリスト
         start_idx: 探索開始インデックス
         config: クラスタリング設定
@@ -250,18 +257,24 @@ def _forward_search(
 
     while scan_idx < len(records):
         scan_record = records[scan_idx]
+
+        # レコードを評価
         action = _evaluate_scan_record(state, scan_record, config)
 
         if action == ForwardSearchAction.SKIP:
+            # このレコードをスキップして次へ
             scan_idx += 1
             continue
 
         if action == ForwardSearchAction.ADD_AND_CONTINUE:
+            # 同じ検出器での滞在継続
+            # → クラスタに追加して、次の検出器を探し続ける
             state.add_record(scan_record, add_to_route=False)
             scan_idx += 1
             continue
 
         if action == ForwardSearchAction.FOUND:
+            # 到達可能なレコード発見！
             print(
                 f"[{state.cluster_id}] 到達可能レコード発見: "
                 f"{state.prev_record.detector_id}→{scan_record.detector_id} "
@@ -271,6 +284,8 @@ def _forward_search(
 
         scan_idx += 1
 
+    # リストの最後まで探索したが、到達可能なレコードが見つからなかった
+    # → このクラスタは終了
     print(f"[{state.cluster_id}] 到達可能レコードなし、クラスタ終了")
     return None
 
@@ -287,23 +302,47 @@ def _cluster_one_group(
 ) -> Optional[Tuple[List[DetectionRecord], List[str]]]:
     """1つのハッシュグループから1つのクラスタを抽出
 
+    レコードリストを時系列順に走査し、物理的に可能な移動を追跡して
+    1つのクラスタ（= 1人分の経路）を構築する。
+
+    【処理の流れ】
+
+    1. 最初の未使用レコードを探す
+    2. ClusterState を初期化
+    3. メインループ:
+       - 候補レコードを評価 (_evaluate_candidate_record)
+       - ADD_TO_CLUSTER → クラスタに追加
+       - FORWARD_SEARCH → 前方探索で到達可能なレコードを探す
+       - SKIP → スキップ（現在は未使用）
+    4. クラスタのレコードと経路を返す
+
+    【重要】
+    この関数は1つのクラスタのみを抽出する。
+    同じハッシュグループに複数人のレコードが混在している場合、
+    残りのレコードは次のパスで処理される。
+
     Args:
         records: レコードリスト（時系列順）
         cluster_id: 作成するクラスタのID
         config: クラスタリング設定
 
     Returns:
-        (cluster_records, route_sequence) または None
+        (cluster_records, route_sequence) または None（未使用レコードがない場合）
     """
+    # =========================================================================
     # 最初の未使用レコードを探す
+    # =========================================================================
     start_idx = 0
     while start_idx < len(records) and records[start_idx].is_judged:
         start_idx += 1
 
     if start_idx >= len(records):
+        # 全てのレコードが使用済み
         return None
 
+    # =========================================================================
     # クラスタ状態を初期化
+    # =========================================================================
     first_record = records[start_idx]
     state = ClusterState(
         cluster_id=cluster_id,
@@ -311,33 +350,46 @@ def _cluster_one_group(
         route_sequence=[],
         prev_record=first_record,
     )
+    # 最初のレコードを追加（経路にも追加）
     state.add_record(first_record, add_to_route=True)
 
-    # メインループ
+    # =========================================================================
+    # メインループ: レコードを順に評価
+    # =========================================================================
     idx = start_idx + 1
     while idx < len(records):
         candidate = records[idx]
 
+        # 使用済みはスキップ
         if candidate.is_judged:
             idx += 1
             continue
 
-        action, add_to_route = _evaluate_candidate_record(state, candidate, config)
+        # 候補レコードを評価
+        action, route_update = _evaluate_candidate_record(state, candidate, config)
 
         if action == RecordAction.ADD_TO_CLUSTER:
+            # クラスタに追加
+            # MOVE なら経路にも追加（新しい検出器への移動）
+            # STAY なら経路には追加しない（滞在継続）
+            add_to_route = route_update == RouteUpdate.MOVE
             state.add_record(candidate, add_to_route=add_to_route)
             idx += 1
 
         elif action == RecordAction.FORWARD_SEARCH:
+            # 前方探索を実行
             found_idx = _forward_search(state, records, idx, config)
             if found_idx is not None:
+                # 到達可能なレコードを採用（新検出器への移動なので経路に追加）
                 found_record = records[found_idx]
                 state.add_record(found_record, add_to_route=True)
                 idx = found_idx + 1
             else:
+                # 到達可能なレコードなし → クラスタ終了
                 break
 
         elif action == RecordAction.SKIP:
+            # スキップ（現在は使用されていない）
             idx += 1
 
     return state.cluster_records, state.route_sequence
@@ -358,17 +410,42 @@ def cluster_records(
 ) -> Tuple[List[EstimatedTrajectory], Dict[str, List[DetectionRecord]], Dict[str, int]]:
     """レコードをクラスタリングして軌跡を形成
 
+    各ハッシュ値のレコード列を時系列順に読み、物理的に可能な移動を追跡して
+    クラスタを形成する。使用したレコードは is_judged=True にマークする。
+
+    【単一パス処理】
+    この関数は1回のスキャンのみを実行する。
+    各ハッシュグループから1つのクラスタのみを抽出する。
+
+    【複数パス処理の必要性】
+    同じハッシュ値を持つ複数人のレコードが混在している場合、
+    1回の呼び出しでは全てを分離できない。
+    is_judged=False のレコードが残っている限り、複数回呼び出すことで
+    反復的にクラスタリングを行う。
+
+    【呼び出し例】
+    ```python
+    cluster_counter = None
+    for pass_num in range(max_passes):
+        trajectories, records, cluster_counter = cluster_records(
+            records, detectors, cluster_counter_state=cluster_counter
+        )
+        if not trajectories:
+            break  # 新しいクラスタが作れなくなったら終了
+    ```
+
     Args:
         grouped_records: ハッシュ値ごとのレコードリスト
         detectors: 検出器の辞書 {detector_id: Detector}
-        walker_speed: 歩行速度 (m/s)
-        impossible_factor: ありえない移動判定の係数
-        allow_long_stays: 長時間滞在を許可するか
-        cluster_counter_state: クラスタカウンターの状態
+        walker_speed: 歩行速度 (m/s)、デフォルト 1.4
+        impossible_factor: ありえない移動判定の係数、デフォルト 0.8
+        allow_long_stays: 長時間滞在を許可するか、デフォルト False
+        cluster_counter_state: クラスタカウンターの状態（パス間で永続化）
 
     Returns:
         (推定軌跡リスト, 更新されたグループ化レコード, 更新されたクラスタカウンター)
     """
+    # 設定をまとめる
     config = ClusteringConfig(
         detectors=detectors,
         walker_speed=walker_speed,
@@ -378,6 +455,7 @@ def cluster_records(
 
     estimated_trajectories: List[EstimatedTrajectory] = []
 
+    # クラスタカウンターの初期化（パス間で永続化）
     if cluster_counter_state is None:
         cluster_counter = defaultdict(int)
     else:
@@ -387,19 +465,26 @@ def cluster_records(
             else defaultdict(int, cluster_counter_state)
         )
 
+    # =========================================================================
+    # ハッシュ値ごとに処理
+    # =========================================================================
     for integrated_hash, records in grouped_records.items():
         if not records:
             continue
 
+        # クラスタIDを生成（例: "C_01_integrated_cluster1"）
         cluster_counter[integrated_hash] += 1
         cluster_id = f"{integrated_hash}_cluster{cluster_counter[integrated_hash]}"
 
+        # 1つのクラスタを抽出
         result = _cluster_one_group(records, cluster_id, config)
         if result is None:
             continue
 
         cluster_recs, route_sequence = result
 
+        # クラスタが有効なら（2つ以上の検出器を訪問）、軌跡として保存
+        # 1つの検出器のみの場合は「移動」とみなさない
         if len(route_sequence) >= 2:
             stays = _create_estimated_stays(cluster_recs, detectors)
 
@@ -429,11 +514,29 @@ def _create_estimated_stays(
     cluster_records: List[DetectionRecord],
     detectors: Dict[str, Detector],
 ) -> List[EstimatedStay]:
-    """クラスタのレコードからEstimatedStayリストを作成"""
+    """クラスタのレコードからEstimatedStayリストを作成
+
+    クラスタに属するレコードを検出器ごとにグループ化し、
+    各検出器での滞在情報を算出する。
+
+    【処理の流れ】
+    1. レコードを検出器IDでグループ化
+    2. 各検出器の最初の検出時刻でソート
+    3. 各検出器について EstimatedStay を作成
+
+    Args:
+        cluster_records: クラスタのレコードリスト
+        detectors: 検出器の辞書
+
+    Returns:
+        EstimatedStayのリスト（検出順）
+    """
+    # 検出器ごとにグループ化
     records_by_detector: Dict[str, List[DetectionRecord]] = defaultdict(list)
     for rec in cluster_records:
         records_by_detector[rec.detector_id].append(rec)
 
+    # 検出順にソート（各検出器の最初の検出時刻順）
     detector_order = sorted(
         records_by_detector.keys(),
         key=lambda d: min(r.timestamp for r in records_by_detector[d]),
