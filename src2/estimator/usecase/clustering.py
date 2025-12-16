@@ -130,56 +130,80 @@ def _forward_search(
     """
 
     def judge_scan_record(scan_record: DetectionRecord) -> ForwardSearchAction:
-        """スキャン中のレコードを判定"""
+        """スキャン中のレコードを判定し、そのレコードに対する操作を返す
+
+        分岐構造:
+        - 使用済み → SKIP
+        - 1分岐目: 現在の検出器と同じ → 滞在継続判定
+        - 2分岐目: 過去に訪れた検出器 → SKIP（ループ回避）
+        - 3分岐目: 新しい検出器 → 到達可能性判定
+        """
         # 使用済みチェック
         if scan_record.is_judged:
             return ForwardSearchAction.SKIP
 
         prev_record = state.prev_record
         prev_det_id = prev_record.detector_id
-        current_detector = state.route_sequence[-1] if state.route_sequence else None
+        current_sequence_detector = (
+            state.route_sequence[-1] if state.route_sequence else None
+        )
+        scan_det_id = scan_record.detector_id
 
-        # 同じ検出器での滞在継続判定
-        if scan_record.detector_id == current_detector:
+        # =================================================================
+        # 1分岐目: 現在の検出器と同じ → 滞在継続判定
+        # =================================================================
+        if scan_det_id == current_sequence_detector:
             if config.allow_long_stays:
                 return ForwardSearchAction.ADD_AND_CONTINUE
-            stay_time_diff = (
+            else:
+                stay_time_diff = (
+                    scan_record.timestamp - prev_record.timestamp
+                ).total_seconds()
+                if stay_time_diff <= MAX_STAY_DURATION:
+                    return ForwardSearchAction.ADD_AND_CONTINUE  # 滞在時間内
+                else:
+                    return ForwardSearchAction.SKIP  # 滞在時間超過
+
+        # =================================================================
+        # 2分岐目: 過去に訪れた検出器 → SKIP（ループ回避）
+        # =================================================================
+        elif scan_det_id in state.route_sequence:
+            return ForwardSearchAction.SKIP
+
+        # =================================================================
+        # 3分岐目: 新しい検出器 → 到達可能性判定
+        # =================================================================
+        else:
+            scan_time_diff = (
                 scan_record.timestamp - prev_record.timestamp
             ).total_seconds()
-            if stay_time_diff <= MAX_STAY_DURATION:
-                return ForwardSearchAction.ADD_AND_CONTINUE  # 滞在時間内
-            return ForwardSearchAction.SKIP  # 滞在時間超過
+            min_travel_time = calculate_min_travel_time(
+                config.detectors[prev_det_id],
+                config.detectors[scan_det_id],
+                config.walker_speed,
+            )
 
-        # ループ回避: 既に推定経路に含まれている検出器はスキップ
-        if scan_record.detector_id in state.route_sequence:
-            return ForwardSearchAction.SKIP
+            # シーケンス番号異常チェック
+            if is_sequence_anomaly(
+                prev_record,
+                scan_record,
+                scan_time_diff,
+                min_travel_time,
+                config.impossible_factor,
+            ):
+                return ForwardSearchAction.SKIP
 
-        # 到達可能性を判定
-        scan_time_diff = (scan_record.timestamp - prev_record.timestamp).total_seconds()
-        min_t_scan = calculate_min_travel_time(
-            config.detectors[prev_det_id],
-            config.detectors[scan_record.detector_id],
-            config.walker_speed,
-        )
+            # ありえない移動チェック
+            elif scan_time_diff < min_travel_time * config.impossible_factor:
+                return ForwardSearchAction.SKIP
 
-        # シーケンス番号異常チェック
-        if is_sequence_anomaly(
-            prev_record,
-            scan_record,
-            scan_time_diff,
-            min_t_scan,
-            config.impossible_factor,
-        ):
-            return ForwardSearchAction.SKIP
-
-        # ありえない移動チェック
-        if scan_time_diff < min_t_scan * config.impossible_factor:
-            return ForwardSearchAction.SKIP
-
-        return ForwardSearchAction.FOUND  # 到達可能なレコード発見
+            # 到達可能なレコード発見
+            else:
+                return ForwardSearchAction.FOUND
 
     scan_idx = start_idx
 
+    # 最後のレコードまでスキャン
     while scan_idx < len(records):
         scan_record = records[scan_idx]
 
@@ -187,13 +211,14 @@ def _forward_search(
         action = judge_scan_record(scan_record)
 
         if action == ForwardSearchAction.SKIP:
-            # このレコードをスキップして次へ
+            # このレコードをスキップして次へ。レコードは追加しないし、推定経路も更新しない
             scan_idx += 1
             continue
 
         if action == ForwardSearchAction.ADD_AND_CONTINUE:
             # 同じ検出器での滞在継続
             # → cluster_recordsにレコードを追加して、次の検出器を探し続ける
+            # 推定経路は更新されない
             state.add_record(scan_record, add_to_route=False)
             scan_idx += 1
             continue
@@ -206,8 +231,6 @@ def _forward_search(
                 f"(idx {start_idx}→{scan_idx}までスキップ)"
             )
             return scan_idx
-
-        scan_idx += 1
 
     # リストの最後まで探索したが、到達可能なレコードが見つからなかった
     # → このクラスタは終了
@@ -258,11 +281,12 @@ def _cluster_one_group(
     # 最初の未使用レコードを探す
     # =========================================================================
     start_idx = 0
+    # 使用済みレコードをスキップし、最初の未使用レコードを見つける
     while start_idx < len(records) and records[start_idx].is_judged:
         start_idx += 1
 
+    # 未使用レコードがない場合は None を返す
     if start_idx >= len(records):
-        # 全てのレコードが使用済み
         return None
 
     # =========================================================================
@@ -273,7 +297,7 @@ def _cluster_one_group(
         cluster_id=cluster_id,
         cluster_records=[],
         route_sequence=[],
-        prev_record=first_record,
+        prev_record=first_record,  # すぐに同様の値で更新されるが、必須なので初期化
     )
     # 最初のレコードを追加（推定経路にも検出器IDを追加）
     state.add_record(first_record, add_to_route=True)
@@ -409,7 +433,7 @@ def cluster_records(
         # クラスタが有効なら（2つ以上の検出器を訪問）、軌跡として保存
         # 1つの検出器のみの場合は「移動」とみなさない
         if len(route_sequence) >= 2:
-            stays = _create_estimated_stays(cluster_recs, detectors)
+            stays = _create_estimated_stays(cluster_recs)
 
             trajectory = EstimatedTrajectory(
                 trajectory_id=f"est_traj_{len(estimated_trajectories) + 1}",
@@ -435,7 +459,6 @@ def cluster_records(
 
 def _create_estimated_stays(
     cluster_records: List[DetectionRecord],
-    detectors: Dict[str, Detector],
 ) -> List[EstimatedStay]:
     """クラスタのレコードからEstimatedStayリストを作成
 
@@ -449,7 +472,6 @@ def _create_estimated_stays(
 
     Args:
         cluster_records: クラスタのレコードリスト
-        detectors: 検出器の辞書
 
     Returns:
         EstimatedStayのリスト（検出順）
