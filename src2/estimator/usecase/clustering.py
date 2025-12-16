@@ -91,123 +91,9 @@ def _judge_candidate_record(
             return RecordAction.ADD_AS_MOVE
 
 
-def _evaluate_scan_record(
-    state: ClusterState,
-    scan_record: DetectionRecord,
-    config: ClusteringConfig,
-) -> ForwardSearchAction:
-    """前方探索中のレコードを評価
-
-    前方探索で各レコードを評価し、取るべきアクションを返す。
-
-    【処理フロー】
-
-        スキャン対象レコード
-              │
-              ▼
-         ┌─────────┐
-         │使用済み？│
-         └─────────┘
-              │
-         YES─┴─NO
-          │     │
-          ▼     ▼
-        SKIP   続行
-                │
-                ▼
-         ┌───────────┐
-         │同じ検出器？│
-         └───────────┘
-              │
-         YES─┴─NO
-          │     │
-          ▼     ▼
-        滞在判定  移動判定
-          │       │
-          ▼       ▼
-        ADD_    FOUND
-        CONTINUE  or SKIP
-
-    【メインループとの違い】
-    - シーケンス番号異常: 前方探索では実際にスキップ判定に使用
-    - ループ回避: 既に推定経路に含まれる検出器はスキップ
-
-    【各アクションの意味】
-    - SKIP: このレコードをスキップして次へ
-    - ADD_AND_CONTINUE: cluster_recordsにレコードを追加して探索継続（まだ次の検出器未発見）
-    - FOUND: 到達可能なレコード発見！探索終了
-
-    Args:
-        state: 現在のクラスタ状態
-        scan_record: 評価対象のレコード
-        config: クラスタリング設定
-
-    Returns:
-        ForwardSearchAction: 取るべきアクション
-    """
-    # =========================================================================
-    # 使用済みチェック
-    # =========================================================================
-    if scan_record.is_judged:
-        return ForwardSearchAction.SKIP
-
-    prev_record = state.prev_record
-    prev_det_id = prev_record.detector_id
-    current_detector = state.route_sequence[-1] if state.route_sequence else None
-
-    # =========================================================================
-    # 同じ検出器での滞在継続判定
-    # =========================================================================
-    # 同じ検出器のレコードは「滞在の継続」として扱う。
-    # cluster_recordsにレコードを追加しつつ、次の検出器を探し続ける。
-    if scan_record.detector_id == current_detector:
-        if config.allow_long_stays:
-            return ForwardSearchAction.ADD_AND_CONTINUE
-
-        stay_time_diff = (scan_record.timestamp - prev_record.timestamp).total_seconds()
-        if stay_time_diff <= MAX_STAY_DURATION:
-            return ForwardSearchAction.ADD_AND_CONTINUE  # 滞在時間内
-        return ForwardSearchAction.SKIP  # 滞在時間超過
-
-    # =========================================================================
-    # ループ回避
-    # =========================================================================
-    # 既に推定経路に含まれている検出器は、ループを避けるためスキップ。
-    # 例: 推定経路が A→B→C の場合、A や B には戻らない
-    if scan_record.detector_id in state.route_sequence:
-        return ForwardSearchAction.SKIP
-
-    # =========================================================================
-    # 到達可能性を判定
-    # =========================================================================
-    scan_time_diff = (scan_record.timestamp - prev_record.timestamp).total_seconds()
-    det_prev = config.detectors[prev_det_id]
-    det_scan = config.detectors[scan_record.detector_id]
-    min_t_scan = calculate_min_travel_time(det_prev, det_scan, config.walker_speed)
-
-    # シーケンス番号異常チェック
-    # 【重要】前方探索では実際にスキップ判定に使用（メインループとの違い）
-    if is_sequence_anomaly(
-        prev_record, scan_record, scan_time_diff, min_t_scan, config.impossible_factor
-    ):
-        return ForwardSearchAction.SKIP
-
-    # ありえない移動チェック
-    if scan_time_diff < min_t_scan * config.impossible_factor:
-        return ForwardSearchAction.SKIP
-
-    # 到達可能なレコード発見！
-    return ForwardSearchAction.FOUND
-
-
-# =============================================================================
-# 前方探索
-# =============================================================================
-
-
 def _forward_search(
     state: ClusterState,
-    records: List[DetectionRecord],
+    records: List[DetectionRecord],  # ハッシュ内のすべてのレコード
     start_idx: int,
     config: ClusteringConfig,
 ) -> Optional[int]:
@@ -242,13 +128,63 @@ def _forward_search(
     Returns:
         到達可能なレコードのインデックス、見つからなければ None
     """
+
+    def judge_scan_record(scan_record: DetectionRecord) -> ForwardSearchAction:
+        """スキャン中のレコードを判定"""
+        # 使用済みチェック
+        if scan_record.is_judged:
+            return ForwardSearchAction.SKIP
+
+        prev_record = state.prev_record
+        prev_det_id = prev_record.detector_id
+        current_detector = state.route_sequence[-1] if state.route_sequence else None
+
+        # 同じ検出器での滞在継続判定
+        if scan_record.detector_id == current_detector:
+            if config.allow_long_stays:
+                return ForwardSearchAction.ADD_AND_CONTINUE
+            stay_time_diff = (
+                scan_record.timestamp - prev_record.timestamp
+            ).total_seconds()
+            if stay_time_diff <= MAX_STAY_DURATION:
+                return ForwardSearchAction.ADD_AND_CONTINUE  # 滞在時間内
+            return ForwardSearchAction.SKIP  # 滞在時間超過
+
+        # ループ回避: 既に推定経路に含まれている検出器はスキップ
+        if scan_record.detector_id in state.route_sequence:
+            return ForwardSearchAction.SKIP
+
+        # 到達可能性を判定
+        scan_time_diff = (scan_record.timestamp - prev_record.timestamp).total_seconds()
+        min_t_scan = calculate_min_travel_time(
+            config.detectors[prev_det_id],
+            config.detectors[scan_record.detector_id],
+            config.walker_speed,
+        )
+
+        # シーケンス番号異常チェック
+        if is_sequence_anomaly(
+            prev_record,
+            scan_record,
+            scan_time_diff,
+            min_t_scan,
+            config.impossible_factor,
+        ):
+            return ForwardSearchAction.SKIP
+
+        # ありえない移動チェック
+        if scan_time_diff < min_t_scan * config.impossible_factor:
+            return ForwardSearchAction.SKIP
+
+        return ForwardSearchAction.FOUND  # 到達可能なレコード発見
+
     scan_idx = start_idx
 
     while scan_idx < len(records):
         scan_record = records[scan_idx]
 
-        # レコードを評価
-        action = _evaluate_scan_record(state, scan_record, config)
+        # レコードを判定
+        action = judge_scan_record(scan_record)
 
         if action == ForwardSearchAction.SKIP:
             # このレコードをスキップして次へ
