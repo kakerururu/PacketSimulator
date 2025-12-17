@@ -25,17 +25,25 @@ class EvaluationConfig:
 
     評価時に使用するパラメータを格納する。
 
+    【設計思想】
+    人流観測の学術的標準に従い、「時間ビニング」のみをパラメータとする。
+    - 時間解像度（temporal resolution）として時間ビン幅を設定
+    - GT・Est両方に同じビニングルールを適用
+    - 同じビン内の軌跡は同一ルートとしてカウント
+
     Attributes:
-        tolerance_seconds: 許容誤差（秒）
-            - GTの滞在時刻に対して、±この時間内のEst検出を許容する
-            - デフォルト: 1200秒 = 20分
-            - 例: GTが10:00-10:30の滞在の場合、
-                  9:40-10:50の範囲内のEst検出を許容
+        time_bin_minutes: 時間ビンの幅（分）
+            - GT・Estの到着時刻をこの時間幅で集約する
+            - デフォルト: 30分
+            - 例: 30分の場合、09:00-09:29 → "0900"ビン、09:30-09:59 → "0930"ビン
+            - 境界処理: 開始時刻 ≤ t < 終了時刻（厳密割り当て）
 
     使用例:
-        config = EvaluationConfig(tolerance_seconds=600.0)  # 10分の許容誤差
+        config = EvaluationConfig(time_bin_minutes=30)  # 30分ビニング
+        config = EvaluationConfig(time_bin_minutes=15)  # 15分ビニング（より詳細）
+        config = EvaluationConfig(time_bin_minutes=60)  # 1時間ビニング（粗い）
     """
-    tolerance_seconds: float = 1200.0  # デフォルト: 20分
+    time_bin_minutes: int = 30  # デフォルト: 30分ビニング
 
 
 # ============================================================================
@@ -87,26 +95,17 @@ class StayEvaluation:
 
     【フィールドの使い方】
     - detector_id: 実際にはルート名が入る
-      例: "ABCD_0900-0910_1000-1010_1100-1110_1200-1210"
-    - gt_start/gt_end/tolerance_start/tolerance_end: ルート評価では空文字
+      例: "ABCD_0900_1000_1100_1200"
 
     Attributes:
         detector_id: ルート名（時系列情報を含む）
-        gt_start: GT滞在開始時刻（ルート評価では空文字）
-        gt_end: GT滞在終了時刻（ルート評価では空文字）
-        tolerance_start: 許容範囲開始（ルート評価では空文字）
-        tolerance_end: 許容範囲終了（ルート評価では空文字）
         gt_count: このルートのGT人数
         est_count: このルートのEst人数
         error: 誤差（|gt_count - est_count|）
         gt_trajectory_ids: このルートに該当するGT軌跡IDリスト
         est_trajectory_ids: このルートに該当するEst軌跡IDリスト
     """
-    detector_id: str               # ルート名（例: "ABCD_0900-0910_..."）
-    gt_start: str                  # GT滞在開始時刻（ルート評価では空文字）
-    gt_end: str                    # GT滞在終了時刻（ルート評価では空文字）
-    tolerance_start: str           # 許容範囲開始（ルート評価では空文字）
-    tolerance_end: str             # 許容範囲終了（ルート評価では空文字）
+    detector_id: str               # ルート名（例: "ABCD_0900_1000_..."）
     gt_count: int                  # このルートのGT人数
     est_count: int                 # このルートのEst人数
     error: int                     # 誤差: |gt_count - est_count|
@@ -169,8 +168,8 @@ class EvaluationResult:
             - evaluation_timestamp: 評価実行日時
             - ground_truth_file: GTファイルパス
             - estimated_file: Estファイルパス
-            - tolerance_seconds: 使用した許容誤差
-            - evaluation_method: 評価方法（"trajectory_based"）
+            - time_bin_minutes: 時間ビンの幅（分）
+            - evaluation_method: 評価方法（"trajectory_based_time_binning"）
             - num_partial_routes: 除外された部分ルート数
             - num_complete_routes: 評価対象の完全ルート数
             - partial_routes: 除外された部分ルートの詳細

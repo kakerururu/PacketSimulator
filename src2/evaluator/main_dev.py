@@ -4,9 +4,14 @@ estimator の DEVモード (main_dev.py) で出力された推定データを使
 - Ground Truth: src2_demo/ground_truth_trajectories.json
 - 推定結果: src2_demo/estimated_trajectories.json
 - 評価結果: src2_demo/evaluation/results.json
+
+【評価方式】
+時間ビニング方式を採用。GT・Est両方に同じビニングルールを適用し、
+同じルート名の軌跡を同一ルートとしてカウントする。
 """
 
-from .usecase.evaluate_trajectories import evaluate_trajectories, EvaluationConfig
+from .usecase.evaluate_trajectories import evaluate_trajectories
+from .domain.evaluation import EvaluationConfig
 from .infrastructure.demo_json_reader import (
     load_demo_ground_truth_trajectories,
     load_demo_estimated_trajectories
@@ -22,7 +27,9 @@ def main_dev():
     estimated_path = "src2_demo/estimated_trajectories.json"
     output_path = "src2_demo/evaluation/results.json"
     log_dir = "src2_demo/evaluate_log"
-    tolerance_seconds = 1200.0  # 20分
+
+    # 評価パラメータ
+    time_bin_minutes = 30  # 30分ビニング（時間解像度）
 
     print("=== 軌跡推定の評価開始 (DEVモード) ===")
     print("📁 使用データ: src2_demo/\n")
@@ -56,8 +63,8 @@ def main_dev():
 
     # 2. 評価実行
     print(f"\n[Phase 2] 評価実行中...")
-    config = EvaluationConfig(tolerance_seconds=tolerance_seconds)
-    print(f"  許容誤差: {config.tolerance_seconds}秒 ({config.tolerance_seconds/60:.1f}分)")
+    config = EvaluationConfig(time_bin_minutes=time_bin_minutes)
+    print(f"  時間ビニング: {config.time_bin_minutes}分")
 
     result = evaluate_trajectories(
         gt_trajectories,

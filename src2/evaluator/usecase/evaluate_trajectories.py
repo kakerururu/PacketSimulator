@@ -2,29 +2,32 @@
 
 責務: GT軌跡とEst軌跡を比較し、推定精度を評価する。
 
-【評価の考え方】
-1. GTの各軌跡に対して、時系列情報を含むルート名を生成
-2. Est軌跡を許容誤差でGTとマッチング
+【評価の考え方 - 時間ビニング方式】
+1. GT・Est両方の軌跡に対して、同じビニングルールでルート名を生成
+2. 同じルート名を持つ軌跡は同一ルートとしてカウント
 3. ルートごとのGT/Est人数を集計し、誤差を計算
 4. MAE/RMSE/追跡率などの指標を算出
+
+【設計思想】
+人流観測の学術的標準に従い、「時間ビニング」のみをパラメータとする。
+- 時間解像度（temporal resolution）として時間ビン幅を設定
+- GT・Est両方に同じビニングルールを適用
+- 同じビン内の軌跡は同一ルートとしてカウント
 
 【評価対象】
 - 完全ルート（すべての検出器を経由）のみを評価対象とする
 - 部分ルート（一部の検出器のみ経由）は除外
 
 【使用方法】
-    from src2.evaluator.usecase.evaluate_trajectories import (
-        evaluate_trajectories
-    )
+    from src2.evaluator.usecase.evaluate_trajectories import evaluate_trajectories
     from src2.evaluator.domain.evaluation import EvaluationConfig
 
-    config = EvaluationConfig(tolerance_seconds=1200.0)
+    config = EvaluationConfig(time_bin_minutes=30)  # 30分ビニング
     result = evaluate_trajectories(gt_list, est_list, config, "gt.json", "est.json")
 """
 
 from typing import List, Dict, Set
 from datetime import datetime
-import math
 
 # ============================================================================
 # ドメインモデルのインポート
@@ -41,8 +44,7 @@ from ..domain.evaluation import (
 # ============================================================================
 # 分割したユースケースモジュールのインポート
 # ============================================================================
-from .route_utils import create_route_with_timing
-from .matching import check_trajectory_all_stays_match
+from .route_utils import create_route_with_timing_binned
 from .metrics import calculate_metrics
 
 
@@ -58,7 +60,7 @@ def evaluate_trajectories(
     ground_truth_file: str,
     estimated_file: str
 ) -> EvaluationResult:
-    """軌跡全体ベースで評価を実行
+    """軌跡全体ベースで評価を実行（時間ビニング方式）
 
     【処理フロー】
 
@@ -70,16 +72,15 @@ def evaluate_trajectories(
                                 ↓
     ┌─────────────────────────────────────────────────────────────┐
     │ 2. GT軌跡の集計                                              │
-    │    - 各GTに時系列ルート名を生成                              │
+    │    - 各GTに時間ビニング済みルート名を生成                    │
     │    - route_stats[ルート名].gt_count をインクリメント         │
     └─────────────────────────────────────────────────────────────┘
                                 ↓
     ┌─────────────────────────────────────────────────────────────┐
     │ 3. Est軌跡の処理                                             │
-    │    3a. 部分ルートは除外                                      │
-    │    3b. 完全ルートをGTとマッチング                            │
-    │        - マッチ成功: GTのルート名でカウント                  │
-    │        - マッチ失敗: Est独自のルート名でカウント             │
+    │    - 部分ルートは除外                                        │
+    │    - 完全ルートに時間ビニング済みルート名を生成              │
+    │    - route_stats[ルート名].est_count をインクリメント        │
     └─────────────────────────────────────────────────────────────┘
                                 ↓
     ┌─────────────────────────────────────────────────────────────┐
@@ -100,7 +101,7 @@ def evaluate_trajectories(
     Args:
         gt_trajectories: Ground Truth軌跡リスト（正解データ）
         est_trajectories: 推定軌跡リスト（Estimatorの出力）
-        config: 評価設定（許容誤差など）
+        config: 評価設定（時間ビン幅）
         ground_truth_file: Ground Truthファイルパス（メタデータ用）
         estimated_file: 推定結果ファイルパス（メタデータ用）
 
@@ -115,7 +116,7 @@ def evaluate_trajectories(
     # ------------------------------------------------------------------------
     # 1a. ルート評価結果を格納する辞書を初期化
     # ------------------------------------------------------------------------
-    # key: 時系列ルート名（例: "ABCD_0900-0910_..."）
+    # key: 時間ビニング済みルート名（例: "ABCD_0900_1000_1100_1200"）
     # value: RouteEvaluation オブジェクト
     route_stats: Dict[str, RouteEvaluation] = {}
 
@@ -132,15 +133,24 @@ def evaluate_trajectories(
     # ========================================================================
     # Phase 2: GT軌跡の集計
     # ========================================================================
-    # 各GT軌跡に対して、時系列情報を含むルート名を生成し、
+    # 各GT軌跡に対して、時間ビニング済みルート名を生成し、
     # route_stats にGT人数を記録する
+    #
+    # 【時間ビニングの適用】
+    # - 到着時刻をビン幅で集約
+    # - 例（30分ビン）: 09:05着 → "0900"、09:35着 → "0930"
+    # - 境界処理: 開始時刻 ≤ t < 終了時刻（厳密割り当て）
+
+    bin_minutes = config.time_bin_minutes
 
     for gt_traj in gt_trajectories:
         # --------------------------------------------------------------------
-        # 2a. 時系列ルート名を生成
+        # 2a. 時間ビニング済みルート名を生成
         # --------------------------------------------------------------------
-        # 例: "ABCD" + stays → "ABCD_0900-0910_1000-1010_1100-1110_1200-1210"
-        route_with_timing = create_route_with_timing(gt_traj.route, gt_traj.stays)
+        # 例: "ABCD" + stays + 30分 → "ABCD_0900_1000_1100_1200"
+        route_with_timing = create_route_with_timing_binned(
+            gt_traj.route, gt_traj.stays, bin_minutes
+        )
 
         # --------------------------------------------------------------------
         # 2b. route_stats に登録（初回のみ）
@@ -164,9 +174,13 @@ def evaluate_trajectories(
     # ========================================================================
     # Phase 3: Est軌跡の処理
     # ========================================================================
-    # 各Est軌跡を処理し、以下のいずれかを行う:
-    # - 部分ルート → 除外（評価対象外）
-    # - 完全ルート → GTとマッチングしてカウント
+    # 各Est軌跡に対して、同じビニングルールでルート名を生成し、
+    # route_stats にEst人数を記録する
+    #
+    # 【ポイント】
+    # - GT・Est両方に同じビニングルールを適用
+    # - 同じルート名 → 同一ルートとしてカウント
+    # - GTに存在しないルート名 → 新規ルートとして追加（GT人数=0）
 
     # 部分ルート/完全ルートのカウント（メタデータ用）
     num_partial_routes = 0   # 除外された部分ルート数
@@ -196,45 +210,33 @@ def evaluate_trajectories(
         # --------------------------------------------------------------------
         num_complete_routes += 1
 
-        # 同じ空間ルート（例："ABDC"）を持つGT軌跡を全て取得
-        # マッチング候補として使用
-        matching_gts = [gt for gt in gt_trajectories if gt.route == est_traj.route]
+        # --------------------------------------------------------------------
+        # 3c. 時間ビニング済みルート名を生成
+        # --------------------------------------------------------------------
+        # GTと同じビニングルールを適用
+        # 例: "ABCD" + stays + 30分 → "ABCD_0900_1000_1100_1200"
+        route_with_timing = create_route_with_timing_binned(
+            est_traj.route, est_traj.stays, bin_minutes
+        )
 
         # --------------------------------------------------------------------
-        # 3c. GTとのマッチング
+        # 3d. route_stats に登録（GTに存在しない場合）
         # --------------------------------------------------------------------
-        # 許容誤差内でマッチするGTを探す
-        matched_gt = None
-        for gt_traj in matching_gts:
-            # 時刻的にマッチするか判定
-            if check_trajectory_all_stays_match(gt_traj, est_traj, config.tolerance_seconds):
-                matched_gt = gt_traj
-                break  # 最初にマッチしたGTを採用
+        if route_with_timing not in route_stats:
+            # GTに存在しないルート → 新規ルートとして追加
+            # これは「Estにしか存在しないルート」= 過検出
+            route_stats[route_with_timing] = RouteEvaluation(
+                route=route_with_timing,
+                gt_count=0,  # GTに存在しないルート
+                est_count=0,
+                error=0,
+                gt_trajectory_ids=[],
+                est_trajectory_ids=[]
+            )
 
         # --------------------------------------------------------------------
-        # 3d. ルート名の決定とカウント
+        # 3e. Est人数をインクリメント
         # --------------------------------------------------------------------
-        if matched_gt:
-            # マッチ成功: GTのルート名（時系列情報付き）を使用
-            # → GTと同じルートとしてカウントされる
-            route_with_timing = create_route_with_timing(matched_gt.route, matched_gt.stays)
-        else:
-            # マッチ失敗: Est独自のルート名を生成
-            # → 新規ルートとしてカウントされる（GTに存在しないか、時刻が大きくズレている）
-            route_with_timing = create_route_with_timing(est_traj.route, est_traj.stays)
-
-            # 新規ルートとして route_stats に登録
-            if route_with_timing not in route_stats:
-                route_stats[route_with_timing] = RouteEvaluation(
-                    route=route_with_timing,
-                    gt_count=0,  # GTに存在しないルート
-                    est_count=0,
-                    error=0,
-                    gt_trajectory_ids=[],
-                    est_trajectory_ids=[]
-                )
-
-        # Est人数をインクリメント
         route_stats[route_with_timing].est_count += 1
         route_stats[route_with_timing].est_trajectory_ids.append(est_traj.trajectory_id)
 
@@ -242,6 +244,11 @@ def evaluate_trajectories(
     # Phase 4: 誤差計算
     # ========================================================================
     # 各ルートの誤差 = |GT人数 - Est人数|
+    #
+    # 【誤差の意味】
+    # - error = 0: GT人数とEst人数が完全一致（理想）
+    # - error > 0, gt > est: 未検出（見逃し）
+    # - error > 0, est > gt: 過検出（誤検出）
 
     for route_eval in route_stats.values():
         route_eval.error = abs(route_eval.gt_count - route_eval.est_count)
@@ -282,10 +289,6 @@ def evaluate_trajectories(
     for route_eval in route_stats.values():
         stay_eval = StayEvaluation(
             detector_id=route_eval.route,  # ルート名を格納
-            gt_start="",                   # ルート評価では使用しない
-            gt_end="",
-            tolerance_start="",
-            tolerance_end="",
             gt_count=route_eval.gt_count,
             est_count=route_eval.est_count,
             error=route_eval.error,
@@ -301,8 +304,8 @@ def evaluate_trajectories(
         "evaluation_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "ground_truth_file": ground_truth_file,
         "estimated_file": estimated_file,
-        "tolerance_seconds": config.tolerance_seconds,
-        "evaluation_method": "trajectory_based",
+        "time_bin_minutes": bin_minutes,
+        "evaluation_method": "trajectory_based_time_binning",
         "num_partial_routes": num_partial_routes,
         "num_complete_routes": num_complete_routes,
         "partial_routes": partial_route_info,

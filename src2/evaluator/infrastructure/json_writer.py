@@ -9,8 +9,8 @@
         "evaluation_timestamp": "2025-01-01 12:00:00",
         "ground_truth_file": "...",
         "estimated_file": "...",
-        "tolerance_seconds": 1200.0,
-        "evaluation_method": "trajectory_based",
+        "time_bin_minutes": 30,
+        "evaluation_method": "trajectory_based_time_binning",
         "num_partial_routes": 0,
         "num_complete_routes": 2,
         "partial_routes": []
@@ -26,7 +26,7 @@
     },
     "stay_evaluations": [
         {
-            "detector_id": "ABCD_...",
+            "detector_id": "ABCD_0900_1000_1100_1200",
             "gt_count": 1,
             "est_count": 1,
             "error": 0,

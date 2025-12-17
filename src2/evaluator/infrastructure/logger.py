@@ -1,4 +1,4 @@
-"""評価ログの出力（軌跡ベース）
+"""評価ログの出力（時間ビニング方式）
 
 責務: 評価結果を人間が読みやすい形式（Markdown, CSV）で出力する。
 
@@ -85,7 +85,7 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path) -> None:
     """サマリーログをMarkdown形式で保存
 
     【出力内容】
-    1. 評価情報（ファイルパス、許容誤差など）
+    1. 評価情報（ファイルパス、時間ビニングなど）
     2. 評価方法の説明
     3. 全体評価指標（MAE, RMSE, 追跡率）
     4. 指標の解釈ガイド
@@ -100,7 +100,7 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path) -> None:
         # ====================================================================
         # ヘッダー
         # ====================================================================
-        f.write("# 軌跡推定の評価ログ（軌跡ベース）\n\n")
+        f.write("# 軌跡推定の評価ログ（時間ビニング方式）\n\n")
 
         # ====================================================================
         # 1. 評価情報
@@ -109,25 +109,27 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path) -> None:
         f.write(f"- **評価日時**: {result.metadata['evaluation_timestamp']}\n")
         f.write(f"- **Ground Truthファイル**: `{result.metadata['ground_truth_file']}`\n")
         f.write(f"- **推定結果ファイル**: `{result.metadata['estimated_file']}`\n")
-        f.write(f"- **許容誤差**: {result.metadata['tolerance_seconds']}秒 ({result.metadata['tolerance_seconds']/60:.1f}分)\n")
+
+        # 時間ビニングの情報を出力
+        time_bin_minutes = result.metadata.get('time_bin_minutes', 30)
+        f.write(f"- **時間ビニング**: {time_bin_minutes}分\n")
         f.write(f"- **評価方法**: {result.metadata['evaluation_method']}\n\n")
 
         # ====================================================================
         # 2. 評価方法の説明
         # ====================================================================
         f.write("## 評価方法\n\n")
-        f.write("GT軌跡に時系列情報を付与し、Est軌跡を許容誤差でマッチングして評価する。\n\n")
+        f.write("GT・Est両方の軌跡に同じ時間ビニングを適用し、ルート名で集計して評価する。\n\n")
 
         f.write("**ルート名の生成**:\n")
-        f.write("- GT軌跡: 時系列情報付きルート名を生成\n")
-        f.write("  - 例: `ABDC_1100-1106_1452-1459_2008-2015_0008-0015`\n")
-        f.write("  - 各地点での滞在時刻（到着-出発）を含む\n\n")
+        f.write(f"- GT軌跡・Est軌跡の両方に同じビニングルールを適用\n")
+        f.write(f"- 到着時刻を{time_bin_minutes}分単位でビニングしてルート名を生成\n")
+        f.write(f"  - 例: `ABDC_0900~0930_1000~1030_1100~1130_1200~1230`\n")
+        f.write(f"  - 境界処理: 開始時刻 ≤ t < 終了時刻（厳密割り当て）\n\n")
 
-        f.write("**Est軌跡のマッチング**:\n")
-        tolerance_min = result.metadata['tolerance_seconds'] / 60
-        f.write(f"- Est軌跡をGTと許容誤差（±{tolerance_min:.0f}分）でマッチング\n")
-        f.write("- マッチした場合: GTと同じルート名でカウント\n")
-        f.write("- マッチしない場合: 独自のルート名で別ルートとしてカウント\n\n")
+        f.write("**マッチングルール**:\n")
+        f.write("- 同じルート名 → 同一ルートとしてカウント\n")
+        f.write("- 異なるルート名 → 別ルートとしてカウント\n\n")
 
         f.write("**評価対象**:\n")
         f.write("- すべての検出器(A,B,C,D)を経由した完全ルートのみ評価対象\n")
@@ -140,7 +142,7 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path) -> None:
         f.write("## 全体評価指標\n\n")
         f.write("| 指標 | 値 | 説明 |\n")
         f.write("|------|-----|------|\n")
-        f.write(f"| 評価したルート数（時系列含む） | {m.total_stays} | 時系列情報を含むルートの種類数 |\n")
+        f.write(f"| 評価したルート数（時間ビン含む） | {m.total_stays} | 時間ビン情報を含むルートの種類数 |\n")
         f.write(f"| GT軌跡総数 | {m.total_gt_count}人 | 全ルート合計のGT人数 |\n")
         f.write(f"| Est軌跡総数（完全ルート） | {m.total_est_count}人 | 評価対象のEst軌跡数 |\n")
         f.write(f"| 総絶対誤差 | {m.total_absolute_error} | 全ルートの誤差の合計 |\n")
@@ -204,7 +206,7 @@ def _save_route_evaluations_csv(result: EvaluationResult, filepath: Path) -> Non
     """ルート評価の詳細をCSV形式で保存
 
     【出力カラム】
-    - route: ルート名（時系列情報を含む）
+    - route: ルート名（時間ビン情報を含む）
     - gt_count: GT人数
     - est_count: Est人数
     - error: 誤差

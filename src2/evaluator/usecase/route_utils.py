@@ -1,90 +1,171 @@
-"""ルート名生成ユーティリティ
+"""ルート名生成ユーティリティ（時間ビニング方式）
 
-責務: ルート文字列に時系列情報を付与する処理を担当。
+責務: ルート文字列に時間ビニング済みの時系列情報を付与する処理を担当。
      評価時にGT/Est軌跡を時間帯で区別するために使用される。
 
+【設計思想】
+人流観測の学術的標準に従い、時間ビニングによるルート名生成を行う。
+- 到着時刻のみをビニングの基準とする
+- GT・Est両方に同じビニングルールを適用
+- 同じビン内の軌跡は同一ルートとして扱う
+
 使用例:
-    # GT軌跡の場合
-    route_name = create_route_with_timing("ABCD", gt_traj.stays)
-    # → "ABCD_0900-0910_1000-1010_1100-1110_1200-1210"
+    # GT軌跡の場合（30分ビニング）
+    route_name = create_route_with_timing_binned("ABCD", gt_traj.stays, 30)
+    # → "ABCD_0900~0930_1000~1030_1100~1130_1200~1230"
 
     # Est軌跡の場合も同様に動作
-    route_name = create_route_with_timing("ABCD", est_traj.stays)
+    route_name = create_route_with_timing_binned("ABCD", est_traj.stays, 30)
 """
 
 from typing import List, Any
+from datetime import datetime
 
 
-def create_route_with_timing(route: str, stays: List[Any]) -> str:
-    """ルート名に時系列情報を付与する
+# ============================================================================
+# 時間ビニング関数
+# ============================================================================
+
+
+def get_time_bin(dt: datetime, bin_minutes: int) -> str:
+    """datetimeを時間ビンに変換する
 
     【目的】
-    同じ空間ルート（例: ABCD）でも、異なる時間帯に通過した場合を
-    区別できるようにする。これにより、評価時に「いつ」その経路を
-    通ったかを考慮したマッチングが可能になる。
+    時刻を指定された時間幅（ビン）に丸めて、同じ時間帯の軌跡を
+    集約できるようにする。
+
+    【ビニングルール】
+    - 境界処理: 開始時刻 ≤ t < 終了時刻（厳密割り当て）
+    - 例（30分ビン）:
+        09:00 → "0900~0930"
+        09:29 → "0900~0930"
+        09:30 → "0930~1000"
+        09:59 → "0930~1000"
+
+    【計算方法】
+    1. 時刻を「0時からの経過分」に変換
+    2. ビン幅で割って切り捨て → 開始時刻
+    3. 開始時刻 + ビン幅 → 終了時刻
+    4. "開始~終了" 形式で返す
+
+    Args:
+        dt: 変換対象のdatetime
+        bin_minutes: ビンの幅（分）
+
+    Returns:
+        ビン識別子（例: "0900~0930", "0930~1000", "1000~1030"）
+
+    Examples:
+        >>> get_time_bin(datetime(2025, 1, 1, 9, 15), 30)
+        "0900~0930"
+        >>> get_time_bin(datetime(2025, 1, 1, 9, 45), 30)
+        "0930~1000"
+    """
+    # ================================================================
+    # 1. 0時からの経過分を計算
+    # ================================================================
+    total_minutes = dt.hour * 60 + dt.minute
+    # 例: 09:15 → 9*60 + 15 = 555分
+
+    # ================================================================
+    # 2. ビン開始時刻を計算（切り捨て）
+    # ================================================================
+    bin_start_minutes = (total_minutes // bin_minutes) * bin_minutes
+    # 例: 555 // 30 = 18 → 18 * 30 = 540分 = 09:00
+
+    # ================================================================
+    # 3. ビン終了時刻を計算
+    # ================================================================
+    bin_end_minutes = bin_start_minutes + bin_minutes
+    # 例: 540 + 30 = 570分 = 09:30
+    # 24時間を超える場合は翌日扱い（例: 23:30~00:00）
+    if bin_end_minutes >= 24 * 60:
+        bin_end_minutes = bin_end_minutes % (24 * 60)
+
+    # ================================================================
+    # 4. HHMM形式に変換
+    # ================================================================
+    start_hour = bin_start_minutes // 60
+    start_minute = bin_start_minutes % 60
+    end_hour = bin_end_minutes // 60
+    end_minute = bin_end_minutes % 60
+
+    return f"{start_hour:02d}{start_minute:02d}~{end_hour:02d}{end_minute:02d}"
+
+
+def create_route_with_timing_binned(route: str, stays: List[Any], bin_minutes: int) -> str:
+    """ルート名に時間ビニング済みの時系列情報を付与する
+
+    【目的】
+    同じ空間ルート（例: ABCD）で、同じ時間帯（ビン）に通過した軌跡を
+    集約できるようにする。到着時刻のみをビニングの基準とする。
 
     【処理フロー】
     1. stays リストを順に走査
-    2. 各 stay の時刻情報を "HHMM-HHMM" 形式で抽出
-       - GT: arrival_time / departure_time
-       - Est: first_detection / last_detection
+    2. 各 stay の到着時刻をビニング
     3. アンダースコアで連結してルート名に付与
 
     【入力例】
     route = "ABCD"
     stays = [
-        Stay(detector="A", arrival=09:00, departure=09:10),
-        Stay(detector="B", arrival=10:00, departure=10:10),
-        Stay(detector="C", arrival=11:00, departure=11:10),
-        Stay(detector="D", arrival=12:00, departure=12:10),
+        Stay(detector="A", arrival=09:05, departure=09:10),
+        Stay(detector="B", arrival=10:22, departure=10:30),
+        Stay(detector="C", arrival=11:45, departure=11:55),
+        Stay(detector="D", arrival=12:10, departure=12:20),
     ]
+    bin_minutes = 30
 
     【出力例】
-    "ABCD_0900-0910_1000-1010_1100-1110_1200-1210"
+    "ABCD_0900~0930_1000~1030_1130~1200_1200~1230"
+    ※ 09:05→0900~0930, 10:22→1000~1030, 11:45→1130~1200, 12:10→1200~1230
 
     Args:
         route: 空間的なルートパターン（例: "ABCD", "DCBA"）
         stays: 滞在情報のリスト。以下のいずれかの属性を持つ:
-               - arrival_time / departure_time (GT軌跡)
-               - first_detection / last_detection (Est軌跡)
+               - arrival_time (GT軌跡)
+               - first_detection (Est軌跡)
+        bin_minutes: 時間ビンの幅（分）
 
     Returns:
-        時系列情報を含むルート名
-        フォーマット: "{route}_{時刻1}_{時刻2}_..."
+        時間ビニング済みのルート名
+        フォーマット: "{route}_{ビン1}_{ビン2}_..."
 
     Note:
         - stays が空の場合は "{route}_" を返す
-        - 時刻は24時間表記（例: 0900, 1430, 2359）
+        - ビン識別子は4桁のHHMM形式
     """
     # ============================================================
-    # 各滞在の時刻情報を抽出
+    # 各滞在の到着時刻をビニング
     # ============================================================
-    time_parts = []  # ["0900-0910", "1000-1010", ...] 形式で格納
+    time_bins = []  # ["0900", "1000", ...] 形式で格納
 
     for stay in stays:
-        # ----------------------------------------------------------
-        # GT軌跡の場合: arrival_time / departure_time 属性を使用
-        # ----------------------------------------------------------
-        if hasattr(stay, 'arrival_time') and hasattr(stay, 'departure_time'):
-            # datetime → "HHMM" 形式の文字列に変換
-            start = stay.arrival_time.strftime("%H%M")   # 例: "0900"
-            end = stay.departure_time.strftime("%H%M")   # 例: "0910"
-            time_parts.append(f"{start}-{end}")          # 例: "0900-0910"
+        arrival_time = None
 
         # ----------------------------------------------------------
-        # Est軌跡の場合: first_detection / last_detection 属性を使用
+        # GT軌跡の場合: arrival_time 属性を使用
         # ----------------------------------------------------------
-        elif hasattr(stay, 'first_detection') and hasattr(stay, 'last_detection'):
-            # datetime → "HHMM" 形式の文字列に変換
-            start = stay.first_detection.strftime("%H%M")  # 例: "0902"
-            end = stay.last_detection.strftime("%H%M")     # 例: "0908"
-            time_parts.append(f"{start}-{end}")            # 例: "0902-0908"
+        if hasattr(stay, 'arrival_time'):
+            arrival_time = stay.arrival_time
+
+        # ----------------------------------------------------------
+        # Est軌跡の場合: first_detection 属性を使用
+        # ----------------------------------------------------------
+        elif hasattr(stay, 'first_detection'):
+            arrival_time = stay.first_detection
+
+        # ----------------------------------------------------------
+        # 到着時刻をビニング
+        # ----------------------------------------------------------
+        if arrival_time is not None:
+            time_bin = get_time_bin(arrival_time, bin_minutes)
+            time_bins.append(time_bin)
 
     # ============================================================
-    # ルート名と時刻情報を連結して返す
+    # ルート名と時間ビンを連結して返す
     # ============================================================
-    # 例: ["0900-0910", "1000-1010"] → "0900-0910_1000-1010"
-    time_str = "_".join(time_parts)
+    # 例: ["0900~0930", "1000~1030", ...] → "0900~0930_1000~1030_..."
+    time_str = "_".join(time_bins)
 
-    # 例: "ABCD" + "_" + "0900-0910_1000-1010" → "ABCD_0900-0910_1000-1010"
+    # 例: "ABCD" + "_" + "0900~0930_1000~1030_..." → "ABCD_0900~0930_1000~1030_..."
     return f"{route}_{time_str}"
