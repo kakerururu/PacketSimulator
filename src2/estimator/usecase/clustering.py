@@ -7,10 +7,7 @@ from ..domain.cluster_state import ClusterState
 from ..domain.clustering_config import ClusteringConfig
 from ..domain.record_action import RecordAction, ForwardSearchAction
 from ...shared.utils.distance_calculator import calculate_min_travel_time
-from .clustering_utils import (
-    MAX_STAY_DURATION,
-    is_sequence_anomaly,
-)
+from .clustering_utils import MAX_STAY_DURATION
 
 
 def _judge_candidate_record(
@@ -182,22 +179,11 @@ def _forward_search(
                 config.walker_speed,
             )
 
-            # シーケンス番号異常チェック
-            if is_sequence_anomaly(
-                prev_record,
-                scan_record,
-                scan_time_diff,
-                min_travel_time,
-                config.impossible_factor,
-            ):
-                return ForwardSearchAction.SKIP
-
             # ありえない移動チェック
-            elif scan_time_diff < min_travel_time * config.impossible_factor:
+            if scan_time_diff < min_travel_time * config.impossible_factor:
                 return ForwardSearchAction.SKIP
-
-            # 到達可能なレコード発見
             else:
+                # 到達可能なレコード発見
                 return ForwardSearchAction.FOUND
 
     scan_idx = start_idx
