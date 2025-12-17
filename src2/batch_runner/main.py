@@ -18,6 +18,12 @@ Examples:
         --num-walkers 10 20 \\
         --runs 3 \\
         --seed 42
+
+    # 時間ビンを15分に設定
+    python -m src2.batch_runner.main \\
+        --num-walkers 50 100 \\
+        --runs 10 \\
+        --time-bin 15
 """
 
 import argparse
@@ -63,6 +69,12 @@ Examples:
         default=None,
         help="乱数シードのベース値（省略時: ランダム、指定時: 再現可能）",
     )
+    parser.add_argument(
+        "--time-bin",
+        type=int,
+        default=30,
+        help="評価時の時間ビン幅（分）（デフォルト: 30）",
+    )
 
     args = parser.parse_args()
 
@@ -81,6 +93,7 @@ Examples:
         num_runs=args.runs,
         output_dir=args.output_dir,
         base_seed=base_seed,
+        time_bin_minutes=args.time_bin,
     )
 
     # 実験を実行

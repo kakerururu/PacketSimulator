@@ -21,6 +21,7 @@ def run_single_experiment(
     num_walkers: int,
     run_dir: str,
     seed: int,
+    time_bin_minutes: int = 30,
 ) -> Dict[str, Any]:
     """1回のシミュレーションを実行
 
@@ -28,6 +29,7 @@ def run_single_experiment(
         num_walkers: 通行人数
         run_dir: 実行結果の出力ディレクトリ
         seed: 乱数シード
+        time_bin_minutes: 評価時の時間ビン幅（分）
 
     Returns:
         評価結果のメトリクス辞書
@@ -58,6 +60,7 @@ def run_single_experiment(
         ground_truth_path=ground_truth_path,
         estimated_path=estimated_path,
         output_path=evaluation_path,
+        time_bin_minutes=time_bin_minutes,
     )
 
     # 評価結果からメトリクスを抽出
@@ -104,6 +107,7 @@ def run_condition(
             num_walkers=num_walkers,
             run_dir=run_dir,
             seed=seed,
+            time_bin_minutes=config.time_bin_minutes,
         )
         run_results.append(metrics)
 
@@ -144,6 +148,7 @@ def run_experiments(config: ExperimentConfig) -> AggregatedResult:
 
     print("=== バッチ実験開始 ===")
     print(f"条件: num_walkers = {config.num_walkers_list}, 各{config.num_runs}回実行")
+    print(f"時間ビン: {config.time_bin_minutes}分")
     print(f"出力先: {experiment_dir}")
     print()
 

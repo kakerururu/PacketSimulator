@@ -16,12 +16,14 @@ class ExperimentConfig:
         num_runs: 各条件での実行回数
         output_dir: 出力ディレクトリ
         base_seed: 乱数シードのベース値（各実行でインクリメント）
+        time_bin_minutes: 評価時の時間ビン幅（分）
 
     Examples:
         >>> config = ExperimentConfig(
         ...     num_walkers_list=[50, 100, 200],
         ...     num_runs=30,
-        ...     output_dir="experiments/"
+        ...     output_dir="experiments/",
+        ...     time_bin_minutes=30
         ... )
     """
 
@@ -29,6 +31,7 @@ class ExperimentConfig:
     num_runs: int
     output_dir: str
     base_seed: int = 42
+    time_bin_minutes: int = 30
 
     def get_seed(self, num_walkers: int, run_index: int) -> int:
         """特定の実行に対するシードを計算
@@ -63,4 +66,5 @@ class ExperimentConfig:
             "num_runs": self.num_runs,
             "output_dir": self.output_dir,
             "base_seed": self.base_seed,
+            "time_bin_minutes": self.time_bin_minutes,
         }
