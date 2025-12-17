@@ -6,7 +6,6 @@ from ..domain.estimated_trajectory import EstimatedTrajectory
 from ..domain.cluster_state import ClusterState
 from ..domain.clustering_config import ClusteringConfig
 from ..domain.record_action import RecordAction, ForwardSearchAction
-from ...shared.domain.detector import Detector
 from ...shared.utils.distance_calculator import calculate_min_travel_time
 from .clustering_utils import (
     MAX_STAY_DURATION,
@@ -243,7 +242,7 @@ def _forward_search(
 # =============================================================================
 
 
-def _cluster_one_group(
+def _extract_one_cluster(
     records: List[DetectionRecord],
     cluster_id: str,
     config: ClusteringConfig,
@@ -347,12 +346,9 @@ def _cluster_one_group(
 # =============================================================================
 
 
-def cluster_records(
+def run_single_clustering_pass(
     grouped_records: Dict[str, List[DetectionRecord]],
-    detectors: Dict[str, Detector],
-    walker_speed: float = 1.4,
-    impossible_factor: float = 0.8,
-    allow_long_stays: bool = False,
+    config: ClusteringConfig,
     cluster_counter_state: Optional[Dict[str, int]] = None,
 ) -> Tuple[List[EstimatedTrajectory], Dict[str, List[DetectionRecord]], Dict[str, int]]:
     """レコードをクラスタリングして軌跡を形成
@@ -372,10 +368,13 @@ def cluster_records(
 
     【呼び出し例】
     ```python
+    from ..infrastructure.config_loader import load_clustering_config
+
+    config = load_clustering_config()  # 設定ファイルから読み込み
     cluster_counter = None
     for pass_num in range(max_passes):
-        trajectories, records, cluster_counter = cluster_records(
-            records, detectors, cluster_counter_state=cluster_counter
+        trajectories, records, cluster_counter = run_single_clustering_pass(
+            records, config, cluster_counter_state=cluster_counter
         )
         if not trajectories:
             break  # 新しいクラスタが作れなくなったら終了
@@ -383,23 +382,14 @@ def cluster_records(
 
     Args:
         grouped_records: ハッシュ値ごとのレコードリスト
-        detectors: 検出器の辞書 {detector_id: Detector}
-        walker_speed: 歩行速度 (m/s)、デフォルト 1.4
-        impossible_factor: ありえない移動判定の係数、デフォルト 0.8
-        allow_long_stays: 長時間滞在を許可するか、デフォルト False
+        config: クラスタリング設定（設定ファイルから load_clustering_config() で取得）
         cluster_counter_state: クラスタカウンターの状態（パス間で永続化）
 
     Returns:
         (推定軌跡リスト, 更新されたグループ化レコード, 更新されたクラスタカウンター)
     """
-    # 設定をまとめる
-    config = ClusteringConfig(
-        detectors=detectors,
-        walker_speed=walker_speed,
-        impossible_factor=impossible_factor,
-        allow_long_stays=allow_long_stays,
-    )
 
+    # すべての推定軌跡を格納するリスト。すべてのハッシュグループを処理した後に返す
     estimated_trajectories: List[EstimatedTrajectory] = []
 
     # クラスタカウンターの初期化（パス間で永続化）
@@ -424,7 +414,7 @@ def cluster_records(
         cluster_id = f"{integrated_hash}_cluster{cluster_counter[integrated_hash]}"
 
         # 1つのクラスタを抽出
-        result = _cluster_one_group(records, cluster_id, config)
+        result = _extract_one_cluster(records, cluster_id, config)
         if result is None:
             continue
 

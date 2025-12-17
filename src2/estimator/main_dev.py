@@ -10,7 +10,6 @@ from .infrastructure.grouped_records_writer import export_grouped_records
 from .infrastructure.clustering_writer import export_clustering_results
 from .usecase.group_by_payload import group_records_by_payload
 from .usecase.estimate_trajectories import estimate_trajectories
-from ..generator.infrastructure.config_loader import load_detectors
 
 
 def main_dev():
@@ -18,19 +17,13 @@ def main_dev():
     print("=== 軌跡推定開始 (DEVモード) ===" )
     print("📁 使用データ: src2_demo/detector_logs/\n")
 
-    # 0. 検出器設定を読み込み
-    print("[Phase 0] 検出器設定を読み込み中...")
-    detectors_list = load_detectors()
-    detectors = {d.id: d for d in detectors_list}
-    print(f"✓ 読み込んだ検出器数: {len(detectors)}")
-
     # 1. 検出ログCSVを読み込み（DEVモード: デモデータのパスを指定）
-    print("\n[Phase 1] 検出ログCSVを読み込み中...")
+    print("[Phase 1] 検出ログCSVを読み込み中...")
     detection_records = read_detector_logs(detector_logs_dir="src2_demo/detector_logs")
     print(f"✓ 読み込んだレコード数: {len(detection_records)}")
 
     # 2. ペイロードごとにグループ化（類似ハッシュ値の統合）
-    print("\n[Phase 2] ペイロードごとにグループ化中...")
+    print("[Phase 2] ペイロードごとにグループ化中...")
     print("  - 類似ハッシュ値を統合（例: C_XX_base_hash + C_XX_sub_hash → C_XX_integrated）")
     grouped_records = group_records_by_payload(detection_records)
     print(f"✓ グループ化完了: {len(grouped_records)} 個のユニークなハッシュ値")
@@ -41,7 +34,7 @@ def main_dev():
         print(f"    - {hash_id}: {len(records)} レコード")
 
     # 3. グループ化されたレコードをCSV出力（DEVモード専用ディレクトリ）
-    print("\n[Phase 3] グループ化されたレコードをCSV出力中...")
+    print("[Phase 3] グループ化されたレコードをCSV出力中...")
     export_result = export_grouped_records(
         grouped_records,
         output_dir="src2_demo/grouped_records"
@@ -52,7 +45,7 @@ def main_dev():
         print(f"  インデックス: {export_result['index_file']}")
 
     # 4. 軌跡推定（複数パスのクラスタリング）
-    print("\n[Phase 4] 軌跡推定中...")
+    print("[Phase 4] 軌跡推定中...")
     print("  - is_judged=False のレコードに対して反復的にクラスタリング")
     print("  - 各パスで物理的に可能な移動を追跡")
     print("  - 使用したレコードを is_judged=True にマーク")
@@ -60,7 +53,6 @@ def main_dev():
     print("  - 各パスの結果をCSV出力")
     estimated_trajectories, updated_grouped_records = estimate_trajectories(
         grouped_records=grouped_records,
-        detectors=detectors,
         max_passes=10,
         output_per_pass=True,
         output_base_dir="src2_demo/clustering_results"

@@ -64,9 +64,8 @@ def run_single_experiment(
     metrics = result.overall_metrics
     return {
         "mae": metrics.mae,
-        "mse": metrics.mse,
         "rmse": metrics.rmse,
-        "exact_match_rate": metrics.exact_match_rate,
+        "tracking_rate": metrics.tracking_rate,
         "total_gt_count": metrics.total_gt_count,
         "total_est_count": metrics.total_est_count,
         "total_absolute_error": metrics.total_absolute_error,

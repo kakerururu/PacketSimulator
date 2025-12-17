@@ -4,24 +4,21 @@ from .infrastructure.csv_reader import read_detector_logs
 from .infrastructure.json_writer import write_estimated_trajectories
 from .infrastructure.grouped_records_writer import export_grouped_records
 from .infrastructure.clustering_writer import export_clustering_results
+from .infrastructure.config_loader import load_clustering_config, load_estimator_settings
 from .usecase.group_by_payload import group_records_by_payload
 from .usecase.estimate_trajectories import estimate_trajectories
-from ..generator.infrastructure.config_loader import load_detectors, load_simulation_settings
 
 
 def main():
     """メイン実行関数"""
-    print("=== 軌跡推定開始 ===" )
+    print("=== 軌跡推定開始 ===")
 
     # 0. 設定を読み込み
     print("\n[Phase 0] 設定を読み込み中...")
-    detectors_list = load_detectors()
-    detectors = {d.id: d for d in detectors_list}
-    settings = load_simulation_settings()
-    walker_speed = settings.get("walker_speed", 1.4)
-    impossible_factor = settings.get("impossible_factor", 0.8)
-    print(f"✓ 読み込んだ検出器数: {len(detectors)}")
-    print(f"✓ 歩行速度: {walker_speed} m/s, impossible_factor: {impossible_factor}")
+    config = load_clustering_config()
+    est_settings = load_estimator_settings()
+    print(f"✓ 読み込んだ検出器数: {len(config.detectors)}")
+    print(f"✓ 歩行速度: {config.walker_speed} m/s, impossible_factor: {config.impossible_factor}")
 
     # 1. 検出ログCSVを読み込み
     print("\n[Phase 1] 検出ログCSVを読み込み中...")
@@ -51,12 +48,10 @@ def main():
     print("  - 各パスの結果をCSV出力")
     estimated_trajectories, updated_grouped_records = estimate_trajectories(
         grouped_records=grouped_records,
-        detectors=detectors,
-        max_passes=10,
+        config=config,
+        max_passes=est_settings.get("max_passes", 10),
         output_per_pass=True,
         output_base_dir="src2_result/clustering_results",
-        walker_speed=walker_speed,
-        impossible_factor=impossible_factor,
     )
     print(f"\n✓ 推定された軌跡数: {len(estimated_trajectories)}")
 

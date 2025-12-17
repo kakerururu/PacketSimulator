@@ -241,15 +241,13 @@ def evaluate_trajectories(
 
     if total_routes > 0:
         mae = sum(errors) / total_routes
-        mse = sum(e**2 for e in errors) / total_routes
-        rmse = math.sqrt(mse)
+        rmse = math.sqrt(sum(e**2 for e in errors) / total_routes)
         exact_matches = sum(1 for e in errors if e == 0)
-        exact_match_rate = exact_matches / total_routes
+        tracking_rate = exact_matches / total_routes
     else:
         mae = 0.0
-        mse = 0.0
         rmse = 0.0
-        exact_match_rate = 0.0
+        tracking_rate = 0.0
 
     # Est軌跡総数を計算（条件を満たしたもの）
     total_est_count = sum(re.est_count for re in route_stats.values())
@@ -257,9 +255,8 @@ def evaluate_trajectories(
     overall_metrics = OverallMetrics(
         total_stays=total_routes,  # ルート数
         mae=mae,
-        mse=mse,
         rmse=rmse,
-        exact_match_rate=exact_match_rate,
+        tracking_rate=tracking_rate,
         total_gt_count=len(gt_trajectories),
         total_est_count=total_est_count,
         total_absolute_error=sum(errors)

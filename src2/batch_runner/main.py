@@ -93,15 +93,13 @@ Examples:
     print("=" * 60)
     for cond in result.conditions:
         mae = cond.metrics["mae"]
-        mse = cond.metrics["mse"]
         rmse = cond.metrics["rmse"]
-        exact_match = cond.metrics["exact_match_rate"]
+        tracking_rate = cond.metrics["tracking_rate"]
 
         print(f"\n【{cond.num_walkers}人】 ({cond.num_runs}回実行)")
         print(f"  MAE:  {mae.mean:.3f} ± {mae.std:.3f} (95%CI: [{mae.ci_95_lower:.3f}, {mae.ci_95_upper:.3f}])")
-        print(f"  MSE:  {mse.mean:.3f} ± {mse.std:.3f} (95%CI: [{mse.ci_95_lower:.3f}, {mse.ci_95_upper:.3f}])")
         print(f"  RMSE: {rmse.mean:.3f} ± {rmse.std:.3f} (95%CI: [{rmse.ci_95_lower:.3f}, {rmse.ci_95_upper:.3f}])")
-        print(f"  正確一致率: {exact_match.mean:.1%} ± {exact_match.std:.1%}")
+        print(f"  追跡率: {tracking_rate.mean:.1%} ± {tracking_rate.std:.1%}")
 
     print()
     print("=" * 60)

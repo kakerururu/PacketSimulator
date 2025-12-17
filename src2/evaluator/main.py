@@ -200,7 +200,7 @@ def main():
     if result.overall_metrics.rmse > result.overall_metrics.mae:
         print(f"    → RMSE > MAE なので、誤差にバラつきがある")
 
-    print(f"\n  正確一致率:                {result.overall_metrics.exact_match_rate:.1%}")
+    print(f"\n  追跡率:                    {result.overall_metrics.tracking_rate:.1%}")
     print(f"    → GT人数とEst人数がピッタリ一致したルートの割合")
     print(f"    → 100%が理想")
 

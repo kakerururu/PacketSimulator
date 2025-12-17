@@ -85,7 +85,7 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path):
         f.write(f"| 総絶対誤差 | {m.total_absolute_error} | 全ルートの誤差の合計 |\n")
         f.write(f"| **MAE** (平均絶対誤差) | **{m.mae:.3f}** | ルートあたりの平均誤差 |\n")
         f.write(f"| **RMSE** (二乗平均平方根誤差) | **{m.rmse:.3f}** | 大きな誤差にペナルティ |\n")
-        f.write(f"| **正確一致率** | **{m.exact_match_rate:.1%}** | GT人数==Est人数のルート割合 |\n\n")
+        f.write(f"| **追跡率** | **{m.tracking_rate:.1%}** | GT人数==Est人数のルート割合 |\n\n")
 
         # 指標の説明
         f.write("### 指標の解釈\n\n")
@@ -95,7 +95,7 @@ def _save_summary_markdown(result: EvaluationResult, filepath: Path):
         f.write("- **RMSE (Root Mean Squared Error)**: MAEより大きな誤差に厳しい\n")
         f.write("  - RMSE > MAE の場合、バラつきが大きい\n")
         f.write("  - 0に近いほど良い\n\n")
-        f.write("- **正確一致率**: 人数がピッタリ合ったルートの割合\n")
+        f.write("- **追跡率 (Tracking Rate)**: 人数がピッタリ合ったルートの割合\n")
         f.write("  - 1.0 (100%) が理想\n\n")
 
         # ルートごとの詳細サマリー

@@ -5,3 +5,5 @@ src2_demo/
 src2_result_edge_case
 experiments/
 debug_test/
+noused/
+config/
