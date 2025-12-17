@@ -336,6 +336,7 @@ def run_single_clustering_pass(
     grouped_records: Dict[str, List[DetectionRecord]],
     config: ClusteringConfig,
     cluster_counter_state: Optional[Dict[str, int]] = None,
+    trajectory_id_offset: int = 0,
 ) -> Tuple[List[EstimatedTrajectory], Dict[str, List[DetectionRecord]], Dict[str, int]]:
     """レコードをクラスタリングして軌跡を形成
 
@@ -358,10 +359,13 @@ def run_single_clustering_pass(
 
     config = load_clustering_config()  # 設定ファイルから読み込み
     cluster_counter = None
+    traj_offset = 0
     for pass_num in range(max_passes):
         trajectories, records, cluster_counter = run_single_clustering_pass(
-            records, config, cluster_counter_state=cluster_counter
+            records, config, cluster_counter_state=cluster_counter,
+            trajectory_id_offset=traj_offset
         )
+        traj_offset += len(trajectories)
         if not trajectories:
             break  # 新しいクラスタが作れなくなったら終了
     ```
@@ -370,6 +374,7 @@ def run_single_clustering_pass(
         grouped_records: ハッシュ値ごとのレコードリスト
         config: クラスタリング設定（設定ファイルから load_clustering_config() で取得）
         cluster_counter_state: クラスタカウンターの状態（パス間で永続化）
+        trajectory_id_offset: 軌跡IDのオフセット（パス間で累積、重複ID防止用）
 
     Returns:
         (推定軌跡リスト, 更新されたグループ化レコード, 更新されたクラスタカウンター)
@@ -412,7 +417,7 @@ def run_single_clustering_pass(
             stays = _create_estimated_stays(cluster_recs)
 
             trajectory = EstimatedTrajectory(
-                trajectory_id=f"est_traj_{len(estimated_trajectories) + 1}",
+                trajectory_id=f"est_traj_{trajectory_id_offset + len(estimated_trajectories) + 1}",
                 cluster_ids=[cluster_id],
                 route="".join(route_sequence),
                 stays=stays,

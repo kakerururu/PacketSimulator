@@ -56,6 +56,7 @@ def estimate_trajectories(
     all_trajectories: List[EstimatedTrajectory] = []
     pass_num = 1
     cluster_counter_state = defaultdict(int)  # クラスタカウンターの状態をパス間で共有
+    trajectory_id_offset = 0  # 軌跡IDオフセット（パス間で累積、重複ID防止用）
 
     print(f"\n{'=' * 60}")
     print(f"複数パスクラスタリング開始（最大{max_passes}パス、新規判定0で終了）")
@@ -80,6 +81,7 @@ def estimate_trajectories(
                 grouped_records=grouped_records,
                 config=config,
                 cluster_counter_state=cluster_counter_state,
+                trajectory_id_offset=trajectory_id_offset,
             )
         )
 
@@ -119,6 +121,9 @@ def estimate_trajectories(
 
         # 全軌跡リストに追加
         all_trajectories.extend(trajectories)
+
+        # 軌跡IDオフセットを更新（次パスで重複しないように）
+        trajectory_id_offset += len(trajectories)
 
         # 終了条件チェック: 新規クラスタがない場合
         if newly_judged == 0:
