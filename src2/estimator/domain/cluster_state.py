@@ -29,7 +29,8 @@ class ClusterState:
         Args:
             record: 追加するレコード
             add_to_route: True の場合、推定経路(route_sequence)にも検出器IDを追加
-                          （新しい検出器に移動した場合に True にする）
+                          （新しい検出器に移動した場合に True にする）。falseだと、
+                          検出器IDは追加されない。
 
         処理内容:
             1. レコードの is_judged を True にマーク（使用済み）

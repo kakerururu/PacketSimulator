@@ -1,6 +1,7 @@
 """Evaluator エントリーポイント
 
-GT軌跡のすべての地点で許容時間内に検出できた場合のみ、正しく推定できたと判定する。
+時間ビニング方式による評価を実行する。
+GT・Est両方に同じビニングルールを適用し、同じルート名の軌跡を同一ルートとしてカウントする。
 """
 
 import argparse
@@ -20,7 +21,7 @@ from .infrastructure.logger import save_evaluation_logs
 def main():
     """メイン関数"""
     parser = argparse.ArgumentParser(
-        description="軌跡推定精度の評価（軌跡ベース）"
+        description="軌跡推定精度の評価（時間ビニング方式）"
     )
     parser.add_argument(
         "--demo",
@@ -43,10 +44,10 @@ def main():
         help="評価結果JSONの出力パス (デフォルト: 通常モード=src2_result/evaluation/results.json, デモモード=src2_demo/evaluation/results.json)"
     )
     parser.add_argument(
-        "--tolerance",
-        type=float,
-        default=1200.0,
-        help="時刻の許容誤差（秒） (デフォルト: 1200 = 20分)"
+        "--time-bin",
+        type=int,
+        default=30,
+        help="時間ビンの幅（分） (デフォルト: 30)"
     )
     args = parser.parse_args()
 
@@ -69,7 +70,7 @@ def main():
 
     print("=" * 60)
     mode_str = "【デモモード】" if args.demo else ""
-    print(f"軌跡推定の評価 {mode_str}")
+    print(f"軌跡推定の評価（時間ビニング方式） {mode_str}")
     print("=" * 60)
 
     # 1. データ読み込み
@@ -107,8 +108,8 @@ def main():
 
     # 2. 評価実行
     print(f"\n[2/3] 評価実行中...")
-    config = EvaluationConfig(tolerance_seconds=args.tolerance)
-    print(f"  許容誤差: {config.tolerance_seconds}秒 ({config.tolerance_seconds/60:.1f}分)")
+    config = EvaluationConfig(time_bin_minutes=args.time_bin)
+    print(f"  時間ビニング: {config.time_bin_minutes}分")
 
     result = evaluate_trajectories(
         gt_trajectories,
@@ -144,7 +145,7 @@ def main():
 
     # 5. サマリー表示
     print("\n" + "=" * 60)
-    print("評価結果サマリー（軌跡ベース）")
+    print("評価結果サマリー（時間ビニング方式）")
     print("=" * 60)
 
     print(f"\n【データ概要】")
@@ -174,14 +175,15 @@ def main():
     print(f"    └ すべての検出器(A,B,C,D)を経由")
     print(f"")
     print(f"【評価方法】")
-    print(f"  完全ルート {num_complete}個を以下のように処理:")
+    print(f"  時間ビニング: {config.time_bin_minutes}分")
     print(f"")
-    print(f"  1. GT軌跡のルート名に時系列情報を付与")
-    print(f"     例: ABCD → ABDC_1100-1106_1452-1459_2008-2015_0008-0015")
+    print(f"  1. GT・Est両方の軌跡に同じビニングルールを適用")
+    print(f"     例: 09:05着 → 0900ビン（30分ビンの場合）")
     print(f"")
-    print(f"  2. Est軌跡を許容誤差（±{config.tolerance_seconds/60:.0f}分）でマッチング")
-    print(f"     ✓ GTと許容誤差内でマッチ → GTと同じルート名でカウント")
-    print(f"     ✓ 許容誤差外、またはGT不在 → 独自ルート名で別ルートとしてカウント")
+    print(f"  2. ルート名を生成")
+    print(f"     例: ABCD_0900_1000_1100_1200")
+    print(f"")
+    print(f"  3. 同じルート名 → 同一ルートとしてカウント")
     print(f"")
     print(f"  処理結果:")
     print(f"    統計に含む:     {num_valid}個 (すべての完全ルート)")
@@ -200,7 +202,7 @@ def main():
     if result.overall_metrics.rmse > result.overall_metrics.mae:
         print(f"    → RMSE > MAE なので、誤差にバラつきがある")
 
-    print(f"\n  正確一致率:                {result.overall_metrics.exact_match_rate:.1%}")
+    print(f"\n  追跡率:                    {result.overall_metrics.tracking_rate:.1%}")
     print(f"    → GT人数とEst人数がピッタリ一致したルートの割合")
     print(f"    → 100%が理想")
 

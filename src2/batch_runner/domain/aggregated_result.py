@@ -38,25 +38,28 @@ class MetricStatistics:
 
 @dataclass
 class ConditionResult:
-    """1つの条件（num_walkers）の結果
+    """1つの条件（num_walkers × time_bin）の結果
 
     Attributes:
         num_walkers: 通行人数
         num_runs: 実行回数
         metrics: メトリクス名 -> 統計情報のマップ
         run_results: 各実行の生の結果（オプション）
+        time_bin: 時間ビン（分）。比較モードで使用。
     """
 
     num_walkers: int
     num_runs: int
     metrics: Dict[str, MetricStatistics]
     run_results: List[Dict[str, Any]] = field(default_factory=list)
+    time_bin: int = 30  # デフォルト30分
 
     def to_dict(self) -> Dict[str, Any]:
         """辞書形式に変換"""
         return {
             "num_walkers": self.num_walkers,
             "num_runs": self.num_runs,
+            "time_bin": self.time_bin,
             "metrics": {name: stat.to_dict() for name, stat in self.metrics.items()},
         }
 
