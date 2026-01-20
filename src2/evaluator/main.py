@@ -5,7 +5,11 @@ GT・Est両方に同じビニングルールを適用し、同じルート名の
 """
 
 import argparse
+import csv
+import math
+from pathlib import Path
 from .usecase.evaluate_trajectories import evaluate_trajectories, EvaluationConfig
+from .usecase.pairwise_movement import calculate_pairwise_movements
 from .infrastructure.json_reader import (
     load_ground_truth_trajectories,
     load_estimated_trajectories
@@ -48,6 +52,12 @@ def main():
         type=int,
         default=30,
         help="時間ビンの幅（分） (デフォルト: 30)"
+    )
+    parser.add_argument(
+        "--time-bin",
+        type=int,
+        default=30,
+        help="時間ビン幅（分）、2地点間移動カウントで使用 (デフォルト: 30)"
     )
     args = parser.parse_args()
 
@@ -121,7 +131,7 @@ def main():
     print(f"    ✓ 評価完了")
 
     # 3. 結果出力
-    print(f"\n[3/4] 結果保存中...")
+    print(f"\n[3/5] 結果保存中...")
     print(f"  JSON出力先: {args.output}")
     try:
         save_evaluation_result(result, args.output)
@@ -130,8 +140,69 @@ def main():
         print(f"    ✗ 保存エラー: {e}")
         return
 
-    # 4. 評価ログ出力
-    print(f"\n[4/4] 評価ログ保存中...")
+    # 4. 2地点間移動カウントをCSVで保存
+    print(f"\n[4/5] 2地点間移動カウント計算中...")
+    print(f"  時間ビン幅: {args.time_bin}分")
+    pairwise_stats = None  # サマリー表示用に保存
+    try:
+        pairwise_result = calculate_pairwise_movements(
+            gt_trajectories,
+            est_trajectories,
+            time_bin_minutes=args.time_bin,
+        )
+
+        # CSV保存
+        output_dir = Path(args.output).parent
+        csv_path = output_dir / "pairwise_movements.csv"
+
+        movements = pairwise_result.movements
+        errors = [abs(m.gt_count - m.est_count) for m in movements]
+
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "origin", "origin_bin", "destination", "destination_bin",
+                "gt_count", "est_count", "error"
+            ])
+            for m, error in zip(movements, errors):
+                writer.writerow([
+                    m.origin, m.origin_bin, m.destination, m.destination_bin,
+                    m.gt_count, m.est_count, error
+                ])
+
+            # サマリー
+            if movements:
+                total = len(errors)
+                mae = sum(errors) / total
+                rmse = math.sqrt(sum(e**2 for e in errors) / total)
+                exact_match = sum(1 for e in errors if e == 0)
+                match_rate = exact_match / total
+
+                writer.writerow([])
+                writer.writerow(["# Summary"])
+                writer.writerow(["total_movements", total])
+                writer.writerow(["mae", f"{mae:.3f}"])
+                writer.writerow(["rmse", f"{rmse:.3f}"])
+                writer.writerow(["exact_match", exact_match])
+                writer.writerow(["match_rate", f"{match_rate:.1%}"])
+
+        print(f"    ✓ CSV保存完了: {csv_path}")
+        if movements:
+            print(f"    [Pairwise] 一致率: {match_rate:.1%} ({exact_match}/{total})")
+            pairwise_stats = {
+                "total": total,
+                "exact_match": exact_match,
+                "match_rate": match_rate,
+                "mae": mae,
+                "rmse": rmse,
+                "time_bin": args.time_bin,
+            }
+    except Exception as e:
+        print(f"    ✗ 2地点間移動カウントエラー: {e}")
+        # 致命的ではないので続行
+
+    # 5. 評価ログ出力
+    print(f"\n[5/5] 評価ログ保存中...")
     try:
         # デモモードの場合はログディレクトリを変更
         log_dir = "src2_demo/evaluate_log" if args.demo else "src2_result/evaluate_log"
@@ -215,6 +286,15 @@ def main():
     for se in sorted_evaluations:
         match_status = "✓" if se.error == 0 else "✗"
         print(f"  {se.detector_id:<8} {se.gt_count:>6} {se.est_count:>7} {se.error:>4} {match_status:>8}")
+
+    # 2地点間移動カウントの結果
+    if pairwise_stats:
+        print(f"\n【2地点間移動カウント】")
+        print(f"  時間ビン幅: {pairwise_stats['time_bin']}分")
+        print(f"  移動ペア数: {pairwise_stats['total']}個")
+        print(f"  一致率:     {pairwise_stats['match_rate']:.1%} ({pairwise_stats['exact_match']}/{pairwise_stats['total']})")
+        print(f"  MAE:        {pairwise_stats['mae']:.3f}")
+        print(f"  RMSE:       {pairwise_stats['rmse']:.3f}")
 
     print("\n" + "=" * 60)
 

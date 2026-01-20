@@ -22,13 +22,61 @@ from .infrastructure.json_reader import (
 from .infrastructure.json_writer import save_evaluation_result
 
 
-def _save_pairwise_csv(pairwise_result: PairwiseMovementResult, output_path: str) -> None:
-    """2地点間移動カウントをCSVで保存"""
+def _save_pairwise_csv(
+    pairwise_result: PairwiseMovementResult, output_path: str
+) -> None:
+    """2地点間移動カウントをCSVで保存（誤差とサマリー付き）"""
+    import math
+
+    movements = pairwise_result.movements
+    errors = [abs(m.gt_count - m.est_count) for m in movements]
+
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["origin", "origin_bin", "destination", "destination_bin", "gt_count", "est_count"])
-        for m in pairwise_result.movements:
-            writer.writerow([m.origin, m.origin_bin, m.destination, m.destination_bin, m.gt_count, m.est_count])
+        # ヘッダー
+        writer.writerow(
+            [
+                "origin",
+                "origin_bin",
+                "destination",
+                "destination_bin",
+                "gt_count",
+                "est_count",
+                "error",
+            ]
+        )
+        # データ
+        for m, error in zip(movements, errors):
+            writer.writerow(
+                [
+                    m.origin,
+                    m.origin_bin,
+                    m.destination,
+                    m.destination_bin,
+                    m.gt_count,
+                    m.est_count,
+                    error,
+                ]
+            )
+
+        # サマリー
+        if movements:
+            total = len(errors)
+            mae = sum(errors) / total
+            rmse = math.sqrt(sum(e**2 for e in errors) / total)
+            exact_match = sum(1 for e in errors if e == 0)
+            match_rate = exact_match / total
+
+            writer.writerow([])  # 空行
+            writer.writerow(["# Summary"])
+            writer.writerow(["total_movements", total])
+            writer.writerow(["mae", f"{mae:.3f}"])
+            writer.writerow(["rmse", f"{rmse:.3f}"])
+            writer.writerow(["exact_match", exact_match])
+            writer.writerow(["match_rate", f"{match_rate:.1%}"])
+
+            # ターミナルに一致率を出力
+            print(f"[Pairwise] 一致率: {match_rate:.1%} ({exact_match}/{total})")
 
 
 def run_evaluator(
