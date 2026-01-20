@@ -51,12 +51,6 @@ def main():
         "--time-bin",
         type=int,
         default=30,
-        help="時間ビンの幅（分） (デフォルト: 30)"
-    )
-    parser.add_argument(
-        "--time-bin",
-        type=int,
-        default=30,
         help="時間ビン幅（分）、2地点間移動カウントで使用 (デフォルト: 30)"
     )
     args = parser.parse_args()
