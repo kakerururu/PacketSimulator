@@ -8,15 +8,27 @@
 同じルート名の軌跡を同一ルートとしてカウントする。
 """
 
+import csv
 from pathlib import Path
 
 from .domain.evaluation import EvaluationResult
+from .domain.pairwise import PairwiseMovementResult
 from .usecase.evaluate_trajectories import evaluate_trajectories, EvaluationConfig
+from .usecase.pairwise_movement import calculate_pairwise_movements
 from .infrastructure.json_reader import (
     load_ground_truth_trajectories,
     load_estimated_trajectories,
 )
 from .infrastructure.json_writer import save_evaluation_result
+
+
+def _save_pairwise_csv(pairwise_result: PairwiseMovementResult, output_path: str) -> None:
+    """2地点間移動カウントをCSVで保存"""
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["origin", "origin_bin", "destination", "destination_bin", "gt_count", "est_count"])
+        for m in pairwise_result.movements:
+            writer.writerow([m.origin, m.origin_bin, m.destination, m.destination_bin, m.gt_count, m.est_count])
 
 
 def run_evaluator(
@@ -60,11 +72,25 @@ def run_evaluator(
         estimated_file=estimated_path,
     )
 
+    # 2地点間移動カウントを計算
+    pairwise_result = calculate_pairwise_movements(
+        gt_trajectories,
+        est_trajectories,
+        time_bin_minutes=time_bin_minutes,
+    )
+    result.pairwise_movements = pairwise_result
+
     # 出力ディレクトリを作成
     output_dir = Path(output_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 結果を保存
+    # 結果を保存（JSONにはpairwise_movementsを含めない）
+    result.pairwise_movements = None
     save_evaluation_result(result, output_path)
+    result.pairwise_movements = pairwise_result  # 戻り値用に復元
+
+    # 2地点間移動カウントをCSVで保存
+    csv_path = str(output_dir / "pairwise_movements.csv")
+    _save_pairwise_csv(pairwise_result, csv_path)
 
     return result

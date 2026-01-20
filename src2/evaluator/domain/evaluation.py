@@ -11,7 +11,9 @@
 """
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
+
+from .pairwise import PairwiseMovementResult
 
 
 # ============================================================================
@@ -177,7 +179,10 @@ class EvaluationResult:
         overall_metrics: 全体の評価指標（MAE, RMSE, 追跡率など）
 
         stay_evaluations: ルートごとの詳細評価結果リスト
+
+        pairwise_movements: 2地点間移動カウント（オプション）
     """
     metadata: dict                           # 評価メタ情報
     overall_metrics: OverallMetrics          # 全体評価指標
     stay_evaluations: List[StayEvaluation]   # ルートごとの詳細
+    pairwise_movements: Optional[PairwiseMovementResult] = None  # 2地点間移動カウント

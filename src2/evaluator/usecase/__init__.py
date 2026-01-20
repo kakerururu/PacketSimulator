@@ -6,6 +6,7 @@
     - evaluate_trajectories.py: メイン評価ロジック
     - route_utils.py: ルート名生成ユーティリティ（時間ビニング）
     - metrics.py: 評価メトリクス計算
+    - pairwise_movement.py: 2地点間移動カウント
 """
 
 # メイン評価関数
@@ -16,6 +17,9 @@ from .route_utils import create_route_with_timing_binned, get_time_bin
 
 # メトリクス計算
 from .metrics import calculate_metrics, MetricsResult
+
+# 2地点間移動カウント
+from .pairwise_movement import calculate_pairwise_movements
 
 # EvaluationConfigはdomainからインポートするよう案内
 # 後方互換性のため、ここからもエクスポート
@@ -31,4 +35,5 @@ __all__ = [
     "MetricsResult",
     # 設定（後方互換性）
     "EvaluationConfig",
+    "calculate_pairwise_movements",
 ]

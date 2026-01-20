@@ -29,6 +29,10 @@ from .evaluation import (
     OverallMetrics,
     EvaluationResult,
 )
+from .pairwise import (
+    PairwiseMovement,
+    PairwiseMovementResult,
+)
 
 __all__ = [
     # 軌跡モデル
@@ -42,4 +46,6 @@ __all__ = [
     "StayEvaluation",
     "OverallMetrics",
     "EvaluationResult",
+    "PairwiseMovement",
+    "PairwiseMovementResult",
 ]

@@ -85,6 +85,10 @@ def save_evaluation_result(result: EvaluationResult, file_path: str) -> None:
         "stay_evaluations": [asdict(se) for se in result.stay_evaluations]
     }
 
+    # 2地点間移動カウントがあれば追加
+    if result.pairwise_movements is not None:
+        data["pairwise_movements"] = result.pairwise_movements.to_dict()
+
     # ========================================================================
     # JSONファイルに書き込み
     # ========================================================================
